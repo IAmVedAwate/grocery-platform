@@ -1,3 +1,6 @@
+// Port 5292 is the HTTP Kestrel endpoint (backend/src/Api/Properties/launchSettings.json).
+// 7223 is HTTPS-only — plain http:// to that port gets ERR_EMPTY_RESPONSE,
+// not a normal error, because Kestrel just drops a non-TLS connection.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5292";
 
 export class ApiError extends Error {

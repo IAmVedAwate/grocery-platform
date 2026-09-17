@@ -35,7 +35,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["JWT_SIGNING_KEY"] = TestJwtSigningKey,
                 ["JWT_ISSUER"] = TestJwtIssuer,
                 ["JWT_AUDIENCE"] = TestJwtAudience,
-                ["ALLOWED_WEB_ORIGIN"] = "http://localhost:3000"
+                ["ALLOWED_WEB_ORIGIN"] = "http://localhost:3000,http://localhost:3001"
             });
         });
     }

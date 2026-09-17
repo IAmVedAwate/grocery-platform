@@ -106,9 +106,15 @@ builder.Services.AddCors();
 builder.Services.AddOptions<CorsOptions>()
     .Configure<IConfiguration>((options, configuration) =>
     {
-        var corsOrigin = configuration["ALLOWED_WEB_ORIGIN"] ?? "http://localhost:3000";
+        // Comma-separated. Next.js dev takes whatever port is free
+        // starting at 3000 — on this machine that's usually 3001, since
+        // another project's dev server already holds 3000 (see
+        // docs/operations/troubleshooting.md) — so both are allowed by
+        // default rather than hardcoding one and hitting this again.
+        var origins = (configuration["ALLOWED_WEB_ORIGIN"] ?? "http://localhost:3000,http://localhost:3001")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         options.AddDefaultPolicy(policy =>
-            policy.WithOrigins(corsOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
     });
 
 builder.Services.AddControllers();

@@ -15,6 +15,14 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### Browser gets `ERR_EMPTY_RESPONSE`; editing the root `.env` did nothing
+
+**Encountered:** 2026-09-17, Phase 1 (first manual browser run of the web app against the F5-debugged API)
+**Symptom:** Every request from the browser to the API (`/auth/refresh`, `/auth/register-store`) failed with `net::ERR_EMPTY_RESPONSE` — not a 4xx/5xx, no response at all. `NEXT_PUBLIC_API_BASE_URL` had been set to `http://localhost:7223` and `ALLOWED_WEB_ORIGIN` to `http://localhost:3001` in the root `.env`, but editing that file changed nothing observable in the browser.
+**Root cause:** Two independent issues stacked on top of each other. (1) Port 7223 is the **HTTPS-only** Kestrel endpoint from `launchSettings.json`'s default profile (`https://localhost:7223;http://localhost:5292`) — sending plain `http://` to a TLS-only port makes Kestrel drop the connection outright rather than reply with an HTTP error, which Chrome reports as `ERR_EMPTY_RESPONSE`. Port 5292 (HTTP) is the one the web client should use. (2) Next.js only auto-loads env files from **its own** directory (`web/.env.local`, `web/.env`, …) — it never reads the repo-root `.env`. So the root `.env` edits were never reaching the browser at all; only a hardcoded fallback in `api-client.ts` was actually in effect, which is why changing that fallback directly "worked" while changing `.env` didn't.
+**Fix:** Reverted `NEXT_PUBLIC_API_BASE_URL` to `http://localhost:5292` everywhere. Created `web/.env.local` (gitignored) as the file Next.js actually reads, with a comment explaining the gap. Also fixed `ALLOWED_WEB_ORIGIN`: it's comma-separated now (`Program.cs` splits it before calling `WithOrigins(...)`, which takes `params string[]` — a single joined string, semicolon or otherwise, was never going to match a real `Origin` header), and defaults to both `http://localhost:3000` and `http://localhost:3001` since another project on this machine already holds 3000, pushing this app's dev server to 3001 (see the ASP.NET Identity entry below for the same "port 3000 is taken" fact surfacing a different way).
+**Prevention:** Documented the root-`.env`-vs-`web/.env.local` split explicitly in both files' comments so it can't be silently rediscovered. General rule: for any config value split across a .NET backend and a Next.js frontend, verify *which process actually reads which file* before assuming an edit took effect — "I changed the file and nothing happened" is a loud signal the file isn't the one being read, not that the change was wrong.
+
 ### ASP.NET Core Identity's defaults assume a single global tenant
 
 **Encountered:** 2026-09-17, Phase 1 (auth + multi-tenant scaffolding)
