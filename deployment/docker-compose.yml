@@ -1,0 +1,40 @@
+name: quickstock
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}
+    ports:
+      # Host port 1434, not 1433 — leaves the default port free for a
+      # locally-installed SQL Server or another project's container.
+      - "1434:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/src/Api/Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DB_CONNECTION_STRING: "Server=sqlserver,1433;Database=QuickStock;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=True"
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in your .env}
+      JWT_ISSUER: quickstock-api
+      JWT_AUDIENCE: quickstock-client
+      ALLOWED_WEB_ORIGIN: "http://localhost:3000"
+    ports:
+      - "5292:8080"
+
+volumes:
+  sqlserver-data:

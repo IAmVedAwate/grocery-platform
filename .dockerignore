@@ -1,0 +1,21 @@
+# .NET build artifacts — copying these in breaks the container build
+# (Windows-built bin/obj contain host-specific paths and Windows binaries
+# incompatible with the Linux build image).
+backend/**/bin/
+backend/**/obj/
+*.user
+.vs/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+
+# Everything else that has no business inside a build context
+.git/
+.github/
+docs/
+.vscode/
+*.md
+.env
+.env.local
