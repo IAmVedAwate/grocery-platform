@@ -1,14 +1,9 @@
-using Microsoft.AspNetCore.Mvc.Testing;
+using Xunit;
 
 namespace Integration;
 
-/// <summary>
-/// Real integration test against the actual hosted API (WebApplicationFactory),
-/// proving the integration test harness works end-to-end. Expand with
-/// Testcontainers-backed SQL Server once Infrastructure/EF Core land in
-/// Phase 1 (see docs/testing/testing-strategy.md).
-/// </summary>
-public class HealthCheckTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Integration")]
+public class HealthCheckTests(CustomWebApplicationFactory factory)
 {
     [Theory]
     [InlineData("/health/live")]
