@@ -1,0 +1,18 @@
+# Normalize line endings in the repository to LF; Git still checks out
+# using each platform's native convention locally.
+* text=auto eol=lf
+
+*.cs text diff=csharp
+*.csproj text
+*.sln text eol=crlf
+*.json text
+*.md text
+*.ts text
+*.tsx text
+
+# Binary assets — never touched by line-ending normalization
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.dll binary

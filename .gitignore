@@ -1,0 +1,34 @@
+# Secrets / local config
+.env
+.env.local
+*.env
+!.env.example
+
+# .NET
+backend/**/bin/
+backend/**/obj/
+*.user
+.vs/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/.env*
+!web/.env.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data volumes / uploaded documents
+.data/
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
