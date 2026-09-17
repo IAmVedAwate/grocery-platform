@@ -15,6 +15,14 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### `docker-compose.yml` silently overrode the app's own CORS default
+
+**Encountered:** 2026-09-18, Phase 2 (first real-browser verification of the UI, end to end, against the Docker Compose stack)
+**Symptom:** Registering a store from the browser failed with a CORS error — `Access to fetch at 'http://localhost:5292/...' from origin 'http://localhost:3001' has been blocked by CORS policy` — even though `Program.cs`'s `ALLOWED_WEB_ORIGIN` default already covers both `:3000` and `:3001` (see the `ERR_EMPTY_RESPONSE`/CORS entry below).
+**Root cause:** `deployment/docker-compose.yml` set `ALLOWED_WEB_ORIGIN: "http://localhost:3000"` as a hardcoded literal in the `api` service's environment block — written before the multi-origin CORS fix existed, and never updated afterward. A hardcoded compose value takes precedence over whatever default `Program.cs` would otherwise apply, so the container was silently running with the *old*, single-origin behavior regardless of what the application code said.
+**Fix:** Changed it to `ALLOWED_WEB_ORIGIN: ${ALLOWED_WEB_ORIGIN:-http://localhost:3000,http://localhost:3001}`, interpolated from `.env` exactly like `JWT_SIGNING_KEY` already was, with the same two-port default as a fallback.
+**Prevention:** This is the second bug in a row (after the `ERR_EMPTY_RESPONSE` one) caused by a value being set in more than one place and only one of them getting updated. General rule reinforced: environment-specific values belong in exactly one place per environment (`.env` for docker-compose, `web/.env.local` for Next.js, user-secrets for bare `dotnet run`) with everything else *reading* from there — never a literal duplicated into a second file "just this once." Caught specifically because this session ran a full real-browser walkthrough (register → product → stock → supplier → PO → checkout → sales history) rather than trusting that "the backend tests pass" meant the deployed container was configured the same way the tests were.
+
 ### Domain state-transition violations surfaced as 500, not 409
 
 **Encountered:** 2026-09-18, Phase 2 (Purchasing/Sales state machines)
