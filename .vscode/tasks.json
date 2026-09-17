@@ -1,0 +1,139 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "backend: restore",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["restore", "${workspaceFolder}/backend/GroceryPlatform.slnx"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "backend: build",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/backend/GroceryPlatform.slnx", "--no-restore"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile",
+      "dependsOn": ["backend: restore"]
+    },
+    {
+      "label": "backend: run api",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["run", "--project", "${workspaceFolder}/backend/src/Api/Api.csproj", "--no-launch-profile"],
+      "options": {
+        "env": { "ASPNETCORE_ENVIRONMENT": "Development", "ASPNETCORE_URLS": "http://localhost:5292" }
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "dotnet",
+        "pattern": { "regexp": "^(.*)$", "file": 1, "location": 1, "message": 1 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Building.*$|^.*dotnet run.*$",
+          "endsPattern": "^.*Now listening on:.*$|^.*Application started.*$"
+        }
+      }
+    },
+    {
+      "label": "backend: watch api",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["watch", "run", "--project", "${workspaceFolder}/backend/src/Api/Api.csproj"],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "dotnet",
+        "pattern": { "regexp": "^(.*)$", "file": 1, "location": 1, "message": 1 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*watch.*Started.*$|^.*dotnet watch.*$",
+          "endsPattern": "^.*Now listening on:.*$|^.*Application started.*$"
+        }
+      }
+    },
+    {
+      "label": "backend: test (all)",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/backend/GroceryPlatform.slnx"],
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "backend: test unit",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/backend/tests/Unit/Unit.csproj"],
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "backend: test integration",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/backend/tests/Integration/Integration.csproj"],
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "backend: test architecture",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/backend/tests/Architecture/Architecture.csproj"],
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "backend: clean",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["clean", "${workspaceFolder}/backend/GroceryPlatform.slnx"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "web: install",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "problemMatcher": []
+    },
+    {
+      "label": "web: dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": { "regexp": "^(.*)$", "file": 1, "location": 1, "message": 1 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*next dev.*$|^.*▲ Next\\.js.*$",
+          "endsPattern": "^.*Ready in.*$|^.*- Local:.*$"
+        }
+      }
+    },
+    {
+      "label": "web: build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "web: lint",
+      "type": "shell",
+      "command": "npm run lint",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: run api + web",
+      "dependsOn": ["backend: watch api", "web: dev"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}
