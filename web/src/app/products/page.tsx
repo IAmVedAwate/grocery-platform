@@ -5,29 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { Field } from "@/components/field";
-
-type ProductDto = {
-  id: string;
-  sku: string;
-  barcode: string | null;
-  name: string;
-  price: number;
-  taxRatePercent: number;
-  isActive: boolean;
-  lowStockThreshold: number;
-};
-
-type PagedResult<T> = {
-  items: T[];
-  page: number;
-  pageSize: number;
-  totalCount: number;
-};
+import { NavBar } from "@/components/nav-bar";
+import type { PagedResult, ProductDto } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 
 export default function ProductsPage() {
-  const { accessToken, isLoading, logout, authFetch } = useAuth();
+  const { accessToken, isLoading, authFetch } = useAuth();
   const router = useRouter();
 
   const [result, setResult] = useState<PagedResult<ProductDto> | null>(null);
@@ -109,13 +93,10 @@ export default function ProductsPage() {
   const totalPages = result ? Math.max(1, Math.ceil(result.totalCount / PAGE_SIZE)) : 1;
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Products</h1>
-        <button onClick={logout} className="text-sm text-gray-500 underline">
-          Sign out
-        </button>
-      </div>
+    <>
+      <NavBar />
+      <main className="mx-auto w-full max-w-4xl flex-1 p-6">
+      <h1 className="mb-6 text-xl font-semibold">Products</h1>
 
       <form onSubmit={handleCreate} className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-medium text-gray-700">Register a product</h2>
@@ -204,6 +185,7 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </>
   );
 }

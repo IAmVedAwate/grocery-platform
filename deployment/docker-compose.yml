@@ -32,7 +32,11 @@ services:
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in your .env}
       JWT_ISSUER: quickstock-api
       JWT_AUDIENCE: quickstock-client
-      ALLOWED_WEB_ORIGIN: "http://localhost:3000"
+      # Was hardcoded to just :3000 — silently overrode Program.cs's own
+      # multi-origin default and broke CORS the moment Next.js landed on
+      # :3001 (docs/operations/troubleshooting.md). Reads from .env now,
+      # same as JWT_SIGNING_KEY above.
+      ALLOWED_WEB_ORIGIN: ${ALLOWED_WEB_ORIGIN:-http://localhost:3000,http://localhost:3001}
     ports:
       - "5292:8080"
 
