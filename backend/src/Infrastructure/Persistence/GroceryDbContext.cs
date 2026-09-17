@@ -5,6 +5,7 @@ using Infrastructure.Identity;
 using Infrastructure.Persistence.Configurations;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Shared.Exceptions;
 
 namespace Infrastructure.Persistence;
 
@@ -25,6 +26,38 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
     public DbSet<PermissionEntity> Permissions => Set<PermissionEntity>();
     public DbSet<RolePermissionEntity> RolePermissions => Set<RolePermissionEntity>();
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
+    public DbSet<Domain.Audit.AuditLogEntry> AuditLogEntries => Set<Domain.Audit.AuditLogEntry>();
+    public DbSet<Domain.Inventory.InventoryItem> InventoryItems => Set<Domain.Inventory.InventoryItem>();
+    public DbSet<Domain.Inventory.StockMovement> StockMovements => Set<Domain.Inventory.StockMovement>();
+    public DbSet<Domain.Purchasing.Supplier> Suppliers => Set<Domain.Purchasing.Supplier>();
+    public DbSet<Domain.Purchasing.PurchaseOrder> PurchaseOrders => Set<Domain.Purchasing.PurchaseOrder>();
+    public DbSet<Domain.Purchasing.PurchaseOrderItem> PurchaseOrderItems => Set<Domain.Purchasing.PurchaseOrderItem>();
+    public DbSet<Domain.Sales.Customer> Customers => Set<Domain.Sales.Customer>();
+    public DbSet<Domain.Sales.SalesOrder> SalesOrders => Set<Domain.Sales.SalesOrder>();
+    public DbSet<Domain.Sales.SalesOrderItem> SalesOrderItems => Set<Domain.Sales.SalesOrderItem>();
+    public DbSet<Domain.Sales.Payment> Payments => Set<Domain.Sales.Payment>();
+    public DbSet<Domain.Sales.Invoice> Invoices => Set<Domain.Sales.Invoice>();
+
+    /// <summary>
+    /// Translates EF Core's DbUpdateConcurrencyException into the
+    /// application's own ConflictAppException here, once, so every
+    /// caller of IUnitOfWork.SaveChangesAsync — Sales checkout racing on
+    /// InventoryItem.RowVersion being the important case
+    /// (docs/architecture/data-architecture.md Concurrency Design) — gets
+    /// a clean 409 without Application code ever referencing EF Core
+    /// (only Infrastructure is allowed to, per docs/architecture/backend-architecture.md).
+    /// </summary>
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictAppException("The data was modified by another request; please retry.");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -121,6 +154,114 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
             b.HasIndex(rt => rt.TokenHash).IsUnique();
             b.HasIndex(rt => rt.FamilyId);
             b.HasOne<ApplicationUser>().WithMany().HasForeignKey(rt => rt.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // --- Phase 2: Audit ---
+        builder.Entity<Domain.Audit.AuditLogEntry>(b =>
+        {
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Action).IsRequired().HasMaxLength(100);
+            b.Property(a => a.EntityType).IsRequired().HasMaxLength(100);
+            b.Property(a => a.EntityId).IsRequired().HasMaxLength(100);
+            b.HasIndex(a => new { a.StoreId, a.CreatedAtUtc });
+            b.HasQueryFilter(a => a.StoreId == tenantContext.StoreId);
+        });
+
+        // --- Phase 2: Inventory ---
+        builder.Entity<Domain.Inventory.InventoryItem>(b =>
+        {
+            b.HasKey(i => i.Id);
+            b.Property(i => i.RowVersion).IsRowVersion();
+            b.HasIndex(i => new { i.StoreId, i.ProductId }).IsUnique();
+            b.HasQueryFilter(i => i.StoreId == tenantContext.StoreId);
+        });
+
+        builder.Entity<Domain.Inventory.StockMovement>(b =>
+        {
+            b.HasKey(m => m.Id);
+            b.Property(m => m.Type).HasConversion<string>().HasMaxLength(20);
+            b.Property(m => m.Reason).HasMaxLength(500);
+            b.Property(m => m.ReferenceType).HasMaxLength(100);
+            b.HasIndex(m => new { m.StoreId, m.InventoryItemId, m.CreatedAtUtc });
+            b.HasOne<Domain.Inventory.InventoryItem>().WithMany().HasForeignKey(m => m.InventoryItemId).OnDelete(DeleteBehavior.Cascade);
+            b.HasQueryFilter(m => m.StoreId == tenantContext.StoreId);
+        });
+
+        // --- Phase 2: Purchasing ---
+        builder.Entity<Domain.Purchasing.Supplier>(b =>
+        {
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Name).IsRequired().HasMaxLength(200);
+            b.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(s => new { s.StoreId, s.Name });
+            b.HasQueryFilter(s => s.StoreId == tenantContext.StoreId);
+        });
+
+        builder.Entity<Domain.Purchasing.PurchaseOrder>(b =>
+        {
+            b.HasKey(o => o.Id);
+            b.Property(o => o.Status).HasConversion<string>().HasMaxLength(30);
+            b.HasIndex(o => new { o.StoreId, o.Status });
+            b.HasMany(o => o.Items).WithOne().HasForeignKey(i => i.PurchaseOrderId).OnDelete(DeleteBehavior.Cascade);
+            b.Navigation(o => o.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.HasOne<Domain.Purchasing.Supplier>().WithMany().HasForeignKey(o => o.SupplierId).OnDelete(DeleteBehavior.Restrict);
+            b.HasQueryFilter(o => o.StoreId == tenantContext.StoreId);
+        });
+
+        builder.Entity<Domain.Purchasing.PurchaseOrderItem>(b =>
+        {
+            b.HasKey(i => i.Id);
+            b.Property(i => i.UnitCost).HasColumnType("decimal(18,2)");
+        });
+
+        // --- Phase 2: Sales ---
+        builder.Entity<Domain.Sales.Customer>(b =>
+        {
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Name).IsRequired().HasMaxLength(200);
+            b.HasIndex(c => new { c.StoreId, c.Name });
+            b.HasQueryFilter(c => c.StoreId == tenantContext.StoreId);
+        });
+
+        builder.Entity<Domain.Sales.SalesOrder>(b =>
+        {
+            b.HasKey(o => o.Id);
+            b.Property(o => o.Status).HasConversion<string>().HasMaxLength(30);
+            b.Property(o => o.SubtotalAmount).HasColumnType("decimal(18,2)");
+            b.Property(o => o.TaxAmount).HasColumnType("decimal(18,2)");
+            b.Property(o => o.DiscountAmount).HasColumnType("decimal(18,2)");
+            b.Property(o => o.TotalAmount).HasColumnType("decimal(18,2)");
+            b.Property(o => o.IdempotencyKey).IsRequired().HasMaxLength(100);
+            b.HasIndex(o => new { o.StoreId, o.IdempotencyKey }).IsUnique();
+            b.HasMany(o => o.Items).WithOne().HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
+            b.Navigation(o => o.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.HasOne(o => o.Payment).WithOne().HasForeignKey<Domain.Sales.Payment>(p => p.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(o => o.Invoice).WithOne().HasForeignKey<Domain.Sales.Invoice>(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Domain.Sales.Customer>().WithMany().HasForeignKey(o => o.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasQueryFilter(o => o.StoreId == tenantContext.StoreId);
+        });
+
+        builder.Entity<Domain.Sales.SalesOrderItem>(b =>
+        {
+            b.HasKey(i => i.Id);
+            b.Property(i => i.UnitPrice).HasColumnType("decimal(18,2)");
+            b.Property(i => i.TaxAmount).HasColumnType("decimal(18,2)");
+            b.Property(i => i.LineDiscount).HasColumnType("decimal(18,2)");
+        });
+
+        builder.Entity<Domain.Sales.Payment>(b =>
+        {
+            b.HasKey(p => p.Id);
+            b.Property(p => p.Method).HasConversion<string>().HasMaxLength(20);
+            b.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(p => p.Amount).HasColumnType("decimal(18,2)");
+        });
+
+        builder.Entity<Domain.Sales.Invoice>(b =>
+        {
+            b.HasKey(i => i.Id);
+            b.Property(i => i.InvoiceNumber).IsRequired().HasMaxLength(50);
+            b.HasIndex(i => i.InvoiceNumber).IsUnique();
         });
     }
 }

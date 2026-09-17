@@ -15,6 +15,22 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### Domain state-transition violations surfaced as 500, not 409
+
+**Encountered:** 2026-09-18, Phase 2 (Purchasing/Sales state machines)
+**Symptom:** While writing the integration test for "receive against an unapproved purchase order," the request returned `500 Internal Server Error` with a generic "unexpected error" body instead of a clean 409 Conflict.
+**Root cause:** `PurchaseOrder.Approve/Submit/Cancel/ReceiveItems`, `SalesOrder.CapturePayment/IssueInvoice/RefundLines`, and `InventoryItem.Decrease` (called directly from `InventoryApplicationService.AdjustAsync` for negative manual adjustments) all throw plain `InvalidOperationException` for invalid state transitions — the same pattern already used correctly elsewhere in Domain. But `AppExceptionHandler` only maps `Shared.Exceptions.AppException` subtypes to a specific status code; anything else, including this `InvalidOperationException`, falls through to the generic 500 handler. For Catalog/Identity this was never hit because the Application layer always pre-checked the condition and threw `ConflictAppException` directly *before* calling into Domain — that discipline was never applied to the new Purchasing/Sales/Inventory state machines.
+**Fix:** Added `Application.Common.DomainRuleGuard.Run(...)`, wrapping exactly the Domain calls that can throw for a state-transition violation and rethrowing as `ConflictAppException`. Deliberately *not* a blanket `InvalidOperationException → 409` mapping in the exception handler itself — `HttpTenantContext`'s missing-claim guard also throws `InvalidOperationException`, and that one really is a server bug (a validated JWT missing an expected claim) that should stay a 500. The translation has to happen at the specific call sites that know the exception means "invalid business state," not globally.
+**Prevention:** Every integration test that exercises an invalid state transition (`Receive_WithoutApprovalFirst_ReturnsConflict`, `Receive_MoreThanOrdered_ReturnsServerError_NotSilentOverReceipt`, etc.) asserts the actual status code, not just "not 2xx" — an assertion of `!response.IsSuccessStatusCode` would have silently accepted the 500 and missed this entirely. Caught specifically because the test asserted `HttpStatusCode.Conflict`.
+
+### EF Core couldn't translate `OrderBy` applied after projecting to a custom record
+
+**Encountered:** 2026-09-18, Phase 2 (Inventory overview list, a LEFT JOIN between Product and InventoryItem)
+**Symptom:** `GET /api/v1/inventory` returned 500 with `System.InvalidOperationException: The LINQ expression '...OrderBy(ti => new InventoryOverviewRow(...).Name)' could not be translated`.
+**Root cause:** The repository method built the LEFT JOIN and projected straight to the `InventoryOverviewRow` record in one `select`, then called `.Where(...)` / `.OrderBy(r => r.Name)` on the *already-projected* IQueryable. EF Core's query translator can't always push an ordering expression that references a property of a client-side-constructed record type back through the join into SQL — it works fine for a simple single-table `Select`, but broke here specifically because of the `DefaultIfEmpty()` LEFT JOIN plus the conditional (`item != null ? ... : 0`) expressions inside the projection.
+**Fix:** Restructured so filtering and ordering happen on the *raw* joined anonymous type (`new { Product, Item }`), and the projection into `InventoryOverviewRow` is the very last step, applied only to the already-paged page of results (`.OrderBy(...).Skip(...).Take(...).Select(...)`). Same data, same SQL intent, but every clause before the final `Select` operates on real table columns EF Core can translate directly.
+**Prevention:** No test had exercised the inventory list endpoint with a mix of "product with stock" and "product with no InventoryItem row yet" until `ListOverview_ShowsProductsWithNoStockRecordYet_AsZero` — general rule adopted: when projecting a join to a custom type, always order/filter *before* the final projection, not after, and verify with a real query against the actual database (this class of translation failure doesn't show up from reading the LINQ alone — it's an EF Core version/complexity-dependent judgment call, not a static error).
+
 ### Browser gets `ERR_EMPTY_RESPONSE`; editing the root `.env` did nothing
 
 **Encountered:** 2026-09-17, Phase 1 (first manual browser run of the web app against the F5-debugged API)

@@ -65,8 +65,21 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenServiceImpl>();
 builder.Services.AddScoped<IStoreRepository, StoreRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<IAuditWriter, Infrastructure.Audit.AuditWriter>();
 builder.Services.AddScoped<AuthApplicationService>();
 builder.Services.AddScoped<ProductApplicationService>();
+
+// Phase 2 — Inventory / Purchasing / Sales
+builder.Services.AddScoped<Application.Inventory.IInventoryRepository, InventoryRepository>();
+builder.Services.AddScoped<Application.Inventory.InventoryApplicationService>();
+builder.Services.AddScoped<Application.Purchasing.ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<Application.Purchasing.IPurchaseOrderRepository, PurchaseOrderRepository>();
+builder.Services.AddScoped<Application.Purchasing.SupplierApplicationService>();
+builder.Services.AddScoped<Application.Purchasing.PurchasingApplicationService>();
+builder.Services.AddScoped<Application.Sales.ICustomerRepository, CustomerRepository>();
+builder.Services.AddScoped<Application.Sales.ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<Application.Sales.CustomerApplicationService>();
+builder.Services.AddScoped<Application.Sales.SalesApplicationService>();
 
 // --- AuthN/AuthZ ---
 builder.Services
@@ -117,7 +130,11 @@ builder.Services.AddOptions<CorsOptions>()
             policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials());
     });
 
-builder.Services.AddControllers();
+// Enums as JSON strings ("Cash", not 0) — matches every DTO that already
+// calls .ToString() on an enum for responses, and is what a real client
+// (the Next.js app, these tests) sends for request bodies too.
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
 
 // "database" is tagged "ready" only — /health/live must stay dependency-free
