@@ -1,0 +1,87 @@
+using Application.Common;
+using Domain.Catalog;
+using Shared.Exceptions;
+
+namespace Application.Catalog;
+
+/// <summary>
+/// Product registration is a P0 acceptance-criterion for speed
+/// (docs/PRD.md §7) — this service intentionally requires only sku, name,
+/// price, and tax rate; everything else is optional.
+/// </summary>
+public sealed class ProductApplicationService(
+    IProductRepository products,
+    ITenantContext tenantContext,
+    IUnitOfWork unitOfWork)
+{
+    public async Task<Product> CreateAsync(CreateProductRequest request, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Barcode) && await products.BarcodeExistsAsync(request.Barcode, ct))
+            throw new ConflictAppException($"Barcode '{request.Barcode}' is already in use.");
+
+        var product = new Product(
+            tenantContext.StoreId,
+            request.Sku,
+            request.Name,
+            request.Price,
+            request.TaxRatePercent,
+            request.Barcode,
+            request.CategoryId,
+            request.BrandId,
+            request.UnitId,
+            request.LowStockThreshold);
+
+        await products.AddAsync(product, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+        return product;
+    }
+
+    public async Task<Product> GetAsync(Guid id, CancellationToken ct)
+    {
+        return await products.GetByIdAsync(id, ct) ?? throw new NotFoundException(nameof(Product), id);
+    }
+
+    public async Task<PagedResult<Product>> ListAsync(PageRequest page, string? search, bool? isActive, CancellationToken ct)
+    {
+        var (items, totalCount) = await products.ListAsync(page.Skip, page.PageSize, search, isActive, ct);
+        return new PagedResult<Product>
+        {
+            Items = items,
+            Page = page.Page,
+            PageSize = page.PageSize,
+            TotalCount = totalCount
+        };
+    }
+
+    public async Task<Product> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken ct)
+    {
+        var product = await products.GetByIdAsync(id, ct) ?? throw new NotFoundException(nameof(Product), id);
+
+        if (!string.IsNullOrWhiteSpace(request.Barcode)
+            && request.Barcode != product.Barcode
+            && await products.BarcodeExistsAsync(request.Barcode, ct))
+            throw new ConflictAppException($"Barcode '{request.Barcode}' is already in use.");
+
+        product.UpdateDetails(
+            request.Name, request.Price, request.TaxRatePercent, request.Barcode,
+            request.CategoryId, request.BrandId, request.UnitId, request.LowStockThreshold);
+
+        await unitOfWork.SaveChangesAsync(ct);
+        return product;
+    }
+
+    public async Task DeactivateAsync(Guid id, CancellationToken ct)
+    {
+        var product = await products.GetByIdAsync(id, ct) ?? throw new NotFoundException(nameof(Product), id);
+        product.Deactivate();
+        await unitOfWork.SaveChangesAsync(ct);
+    }
+}
+
+public sealed record CreateProductRequest(
+    string Sku, string Name, decimal Price, decimal TaxRatePercent,
+    string? Barcode, Guid? CategoryId, Guid? BrandId, Guid? UnitId, int LowStockThreshold);
+
+public sealed record UpdateProductRequest(
+    string Name, decimal Price, decimal TaxRatePercent,
+    string? Barcode, Guid? CategoryId, Guid? BrandId, Guid? UnitId, int LowStockThreshold);
