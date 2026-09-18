@@ -15,6 +15,14 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### EF Core query-syntax `group ... into g select g` breaks further composition
+
+**Encountered:** 2026-09-18, Phase 3 (Reporting module — sales-by-product and sales-by-category)
+**Symptom:** `GET /api/v1/reports/sales-by-product` and `/sales-by-category` both returned `500` with `System.InvalidOperationException: Translation of 'Select' which contains grouping parameter without composition is not supported.` — the day-grouped report (`sales-by-day`), written with method-syntax `.GroupBy(...)` directly, worked fine.
+**Root cause:** Both broken queries used C# query-syntax ending in `group item by new {...} into g select g;`. That trailing `select g` compiles to `.GroupBy(keySelector, elementSelector).Select(g => g)` — an identity projection wrapping the grouped queryable. EF Core can translate a plain `GroupBy(...)` and compose further clauses (`CountAsync`, `OrderByDescending`, `Skip`, `Take`, a real `Select`) on top of it, but once that composition target is itself a `Select(g => g)` sitting directly on the `GroupBy`, the translator can no longer push `CountAsync`/further composition through it. The `sales-by-day` query never hit this because it was written as bare `.GroupBy(o => o.CreatedAtUtc.Date)` with no trailing select.
+**Fix:** Dropped `into g select g` from both queries — `group item by new {...};` on its own is already an `IQueryable<IGrouping<TKey, TElement>>` with no wrapping `Select`, and composes normally with `.CountAsync()`, `.OrderByDescending(...)`, `.Skip()/.Take()`, and a genuine final `.Select(...)` into the DTO.
+**Prevention:** When translating a LINQ query-syntax group-by that needs to be reused/composed further (count + paged projection, as every report here does), either end it with a real projection instead of a bare `into g select g` continuation, or just drop the `into ... select` entirely and let the `group by` expression itself be the queryable. General rule: prefer method syntax for any `GroupBy` that will be composed further — it makes the "is there an extra `.Select(g => g)` in here" question visible instead of hidden inside query-syntax sugar. Caught because every report endpoint has an integration test that asserts real aggregated numbers, not just "returns 200."
+
 ### SQL Server container stops silently; F5 throws a raw `SqlException`
 
 **Encountered:** 2026-09-18 (twice — once mid-Phase-1, once again after Phase 2), local development via VS Code's `API: Debug (.NET)` launch config

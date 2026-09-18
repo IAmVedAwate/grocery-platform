@@ -114,6 +114,10 @@ builder.Services.AddScoped<Application.Sales.ISalesOrderRepository, SalesOrderRe
 builder.Services.AddScoped<Application.Sales.CustomerApplicationService>();
 builder.Services.AddScoped<Application.Sales.SalesApplicationService>();
 
+// Phase 3 — Reporting
+builder.Services.AddScoped<Application.Reporting.IReportingRepository, ReportingRepository>();
+builder.Services.AddScoped<Application.Reporting.ReportingApplicationService>();
+
 // --- AuthN/AuthZ ---
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
