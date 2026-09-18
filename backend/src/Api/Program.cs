@@ -101,6 +101,9 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IAuditWriter, Infrastructure.Audit.AuditWriter>();
 builder.Services.AddScoped<AuthApplicationService>();
 builder.Services.AddScoped<ProductApplicationService>();
+builder.Services.AddScoped<Application.Catalog.ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<Application.Catalog.CategoryApplicationService>();
+builder.Services.AddMemoryCache();
 
 // Phase 2 — Inventory / Purchasing / Sales
 builder.Services.AddScoped<Application.Inventory.IInventoryRepository, InventoryRepository>();
