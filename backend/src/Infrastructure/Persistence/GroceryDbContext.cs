@@ -234,6 +234,12 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
             b.Property(o => o.TotalAmount).HasColumnType("decimal(18,2)");
             b.Property(o => o.IdempotencyKey).IsRequired().HasMaxLength(100);
             b.HasIndex(o => new { o.StoreId, o.IdempotencyKey }).IsUnique();
+            // Supports every Reporting query (docs/architecture/sql-performance-pass.md)
+            // and SalesOrderRepository.ListAsync's own CreatedAtUtc ordering — every
+            // one of them filters StoreId first (via the query filter below) and
+            // CreatedAtUtc second, so that's the index's column order too, turning what
+            // was a full clustered index scan into a seek.
+            b.HasIndex(o => new { o.StoreId, o.CreatedAtUtc });
             b.HasMany(o => o.Items).WithOne().HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
             b.Navigation(o => o.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.HasOne(o => o.Payment).WithOne().HasForeignKey<Domain.Sales.Payment>(p => p.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
@@ -248,6 +254,20 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
             b.Property(i => i.UnitPrice).HasColumnType("decimal(18,2)");
             b.Property(i => i.TaxAmount).HasColumnType("decimal(18,2)");
             b.Property(i => i.LineDiscount).HasColumnType("decimal(18,2)");
+
+            // Covering indexes (docs/architecture/sql-performance-pass.md):
+            // every column ReportingRepository's per-product/per-category
+            // aggregates read (Quantity, UnitPrice, TaxAmount, LineDiscount)
+            // plus the join key are INCLUDEd, so SQL Server can answer the
+            // join/aggregate entirely from the narrower nonclustered index
+            // without a key lookup back into the clustered index for every
+            // matching row. SalesOrderId already gets a plain FK index by
+            // EF Core's own convention; this replaces it with a covering
+            // version instead of leaving a second, narrower duplicate.
+            b.HasIndex(i => i.SalesOrderId)
+                .IncludeProperties(i => new { i.ProductId, i.Quantity, i.UnitPrice, i.TaxAmount, i.LineDiscount });
+            b.HasIndex(i => i.ProductId)
+                .IncludeProperties(i => new { i.SalesOrderId, i.Quantity, i.UnitPrice, i.TaxAmount, i.LineDiscount });
         });
 
         builder.Entity<Domain.Sales.Payment>(b =>
