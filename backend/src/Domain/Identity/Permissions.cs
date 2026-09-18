@@ -22,6 +22,7 @@ public static class Permissions
 
     public const string ReportsView = "reports.view";
     public const string UsersManage = "users.manage";
+    public const string NotificationsView = "notifications.view";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -29,7 +30,8 @@ public static class Permissions
         InventoryRead, InventoryAdjust,
         PurchaseCreate, PurchaseApprove,
         SalesCreate, SalesRefund,
-        ReportsView, UsersManage
+        ReportsView, UsersManage,
+        NotificationsView
     ];
 }
 
@@ -57,13 +59,13 @@ public static class DefaultRoles
                 Permissions.InventoryRead, Permissions.InventoryAdjust,
                 Permissions.PurchaseCreate, Permissions.PurchaseApprove,
                 Permissions.SalesCreate, Permissions.SalesRefund,
-                Permissions.ReportsView
+                Permissions.ReportsView, Permissions.NotificationsView
             ],
             [InventoryManager] =
             [
                 Permissions.CatalogRead, Permissions.CatalogManage,
                 Permissions.InventoryRead, Permissions.InventoryAdjust,
-                Permissions.PurchaseCreate
+                Permissions.PurchaseCreate, Permissions.NotificationsView
             ],
             [Cashier] =
             [

@@ -15,6 +15,14 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### Low-stock notification sweep test asserted an exact count in a shared database
+
+**Encountered:** 2026-09-18, Phase 3 (background low-stock notification worker)
+**Symptom:** `LowStockNotificationTests.GenerateAsync_CreatesNotification_...` passed in isolation (`--filter`) but failed when the full suite ran together: `Assert.Equal() Failure: Expected: 1, Actual: 7`.
+**Root cause:** `ILowStockNotificationGenerator.GenerateAsync()` is a deliberate cross-tenant sweep (see its own XML doc comment) — it has no HttpContext/ITenantContext to scope itself to one store, by design, since it runs from a background worker. The integration suite's Testcontainers SQL Server is one shared container for the *entire* test run (docs/testing/testing-strategy.md), so by the time this test ran, dozens of other test classes had already created products with the default `LowStockThreshold=0` and no stock — each one trivially satisfies `QuantityOnHand (0) <= LowStockThreshold (0)`, the same "low stock" definition already used by `GET /api/v1/inventory?lowStockOnly=true`. The sweep correctly picked up every one of them, not just this test's own product — the assertion was wrong, not the generator.
+**Fix:** Changed the first sweep's assertion from an exact `Assert.Equal(1, created)` to `Assert.True(created >= 1, ...)`, and left every other assertion in the test scoped to this test's own store/product (`GET /api/v1/notifications` is tenant-filtered; the payload match checks a specific product ID) — those don't need loosening, because tenant scoping already isolates them from the noise. The *delta* assertions (second sweep creates 0 once a notification is open, third sweep creates 1 again once it's marked read) remain exact, since xUnit runs every test in the `"Integration"` collection sequentially — no other test method's sweep can interleave between this test's own three calls.
+**Prevention:** Any test against a cross-tenant/global code path (a background job, an admin-only cross-store report, etc.) run against the suite's shared database must assert on its *own* tenant-scoped slice of the result, never a bare global count — the moment a second test class exists that also creates matching data, an exact global assertion becomes a ticking flaky-test time bomb that only fires once the suite is large enough. Caught specifically because the full suite was re-run after adding the isolated test, rather than trusting the `--filter`-scoped pass alone.
+
 ### EF Core query-syntax `group ... into g select g` breaks further composition
 
 **Encountered:** 2026-09-18, Phase 3 (Reporting module — sales-by-product and sales-by-category)

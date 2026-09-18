@@ -37,6 +37,7 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
     public DbSet<Domain.Sales.SalesOrderItem> SalesOrderItems => Set<Domain.Sales.SalesOrderItem>();
     public DbSet<Domain.Sales.Payment> Payments => Set<Domain.Sales.Payment>();
     public DbSet<Domain.Sales.Invoice> Invoices => Set<Domain.Sales.Invoice>();
+    public DbSet<Domain.Notifications.Notification> Notifications => Set<Domain.Notifications.Notification>();
 
     /// <summary>
     /// Translates EF Core's DbUpdateConcurrencyException into the
@@ -262,6 +263,19 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
             b.HasKey(i => i.Id);
             b.Property(i => i.InvoiceNumber).IsRequired().HasMaxLength(50);
             b.HasIndex(i => i.InvoiceNumber).IsUnique();
+        });
+
+        // --- Phase 3: Notifications ---
+        builder.Entity<Domain.Notifications.Notification>(b =>
+        {
+            b.HasKey(n => n.Id);
+            b.Property(n => n.Type).IsRequired().HasMaxLength(50);
+            b.Property(n => n.Payload).IsRequired();
+            // Supports LowStockNotificationGenerator's per-product dedupe
+            // check and the notifications feed's unread-first ordering.
+            b.HasIndex(n => new { n.StoreId, n.ReferenceId, n.IsRead });
+            b.HasIndex(n => new { n.StoreId, n.IsRead, n.CreatedAtUtc });
+            b.HasQueryFilter(n => n.StoreId == tenantContext.StoreId);
         });
     }
 }

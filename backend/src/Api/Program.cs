@@ -121,6 +121,12 @@ builder.Services.AddScoped<Application.Sales.SalesApplicationService>();
 builder.Services.AddScoped<Application.Reporting.IReportingRepository, ReportingRepository>();
 builder.Services.AddScoped<Application.Reporting.ReportingApplicationService>();
 
+// Phase 3 — Notifications (low-stock background sweep)
+builder.Services.AddScoped<Application.Notifications.INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<Application.Notifications.NotificationApplicationService>();
+builder.Services.AddScoped<Application.Notifications.ILowStockNotificationGenerator, Infrastructure.Notifications.LowStockNotificationGenerator>();
+builder.Services.AddHostedService<Api.BackgroundServices.LowStockNotificationWorker>();
+
 // --- AuthN/AuthZ ---
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
