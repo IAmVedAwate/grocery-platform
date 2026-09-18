@@ -96,3 +96,39 @@ export type SalesOrderDto = {
   invoiceNumber: string | null;
   items: SalesOrderItemDto[];
 };
+
+export type SalesByDayRow = {
+  date: string; // "yyyy-MM-dd"
+  orderCount: number;
+  revenue: number;
+  averageOrderValue: number;
+};
+
+export type SalesByProductRow = {
+  productId: string;
+  sku: string;
+  name: string;
+  quantitySold: number;
+  revenue: number;
+};
+
+export type SalesByCategoryRow = {
+  categoryId: string | null;
+  categoryName: string;
+  quantitySold: number;
+  revenue: number;
+};
+
+export type NotificationDto = {
+  id: string;
+  type: string;
+  referenceId: string | null;
+  payload: string;
+  isRead: boolean;
+  createdAtUtc: string;
+};
+
+export type CategoryDto = {
+  id: string;
+  name: string;
+};
