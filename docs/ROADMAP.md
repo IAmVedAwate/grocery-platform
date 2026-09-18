@@ -32,6 +32,8 @@ Each phase ends with four checkpoints, per the original planning brief:
 - *Interview:* "Explain access token vs refresh token." "How do you prevent a stolen refresh token from being reused silently?" "How does your system stop tenant A from reading tenant B's data — what's the actual enforcement point?"
 - *Evidence:* integration test that logs in as Tenant A and asserts a Tenant B product ID returns 404; architecture test asserting `Domain` has no reference to `Infrastructure`.
 
+Full write-up, with file/line references and interview answers in first person: [checkpoints/phase-1-checkpoint-explanation.md](./checkpoints/phase-1-checkpoint-explanation.md).
+
 ---
 
 ## Phase 2 — Core Business Workflows (P0)
@@ -51,6 +53,8 @@ Each phase ends with four checkpoints, per the original planning brief:
 - *Learning:* optimistic concurrency vs pessimistic locking and why rowversion was chosen here; what makes a multi-step operation "transactional" in EF Core; SCOPE_IDENTITY/multi-row insert pitfalls (from the developer's own prior SQL mistakes) and how this design avoids them.
 - *Interview:* "How do you prevent overselling inventory under concurrent requests?" "What happens if payment succeeds but invoice creation fails?" "Why rowversion instead of a database lock here?"
 - *Evidence:* the concurrency integration test in the repo with its assertions; a demo recording/screenshot of the full purchase→receive→sell flow.
+
+Full write-up, with file/line references and interview answers in first person: [checkpoints/phase-2-checkpoint-explanation.md](./checkpoints/phase-2-checkpoint-explanation.md).
 
 ---
 
