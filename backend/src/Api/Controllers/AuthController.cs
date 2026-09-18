@@ -1,10 +1,16 @@
 using Application.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Api.Controllers;
 
+/// <summary>Rate-limited as a whole (docs/security/security-model.md) —
+/// register-store, login, and refresh are exactly the endpoints brute-force
+/// / credential-stuffing targets, and there's no legitimate reason for one
+/// client to hit any of them more than a handful of times a minute.</summary>
 [ApiController]
 [Route("api/v1/auth")]
+[EnableRateLimiting("auth")]
 public sealed class AuthController(AuthApplicationService authService) : ControllerBase
 {
     private const string RefreshCookieName = "refreshToken";

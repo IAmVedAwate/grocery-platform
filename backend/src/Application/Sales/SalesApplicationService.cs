@@ -2,6 +2,7 @@ using Application.Catalog;
 using Application.Common;
 using Application.Inventory;
 using Domain.Sales;
+using Microsoft.Extensions.Logging;
 using Shared.Exceptions;
 
 namespace Application.Sales;
@@ -22,7 +23,8 @@ public sealed class SalesApplicationService(
     InventoryApplicationService inventoryService,
     ITenantContext tenantContext,
     IAuditWriter auditWriter,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<SalesApplicationService> logger)
 {
     public async Task<SalesOrder> CheckoutAsync(CheckoutRequest request, CancellationToken ct)
     {
@@ -74,6 +76,16 @@ public sealed class SalesApplicationService(
         // any line) surfaces to the caller as ConflictAppException — see
         // GroceryDbContext.SaveChangesAsync.
         await unitOfWork.SaveChangesAsync(ct);
+
+        // A genuine business event, not request plumbing — this is the
+        // "log levels used meaningfully" line from docs/ROADMAP.md Phase 3:
+        // this is worth an Information line on its own merits, independent
+        // of the generic per-request summary UseSerilogRequestLogging()
+        // already emits.
+        logger.LogInformation(
+            "Sale {SalesOrderId} completed for store {StoreId}: {LineCount} lines, total {Total}",
+            order.Id, tenantContext.StoreId, resolvedLines.Count, order.TotalAmount);
+
         return order;
     }
 
@@ -89,6 +101,8 @@ public sealed class SalesApplicationService(
             new { quantityByProductId, resultingStatus = order.Status.ToString() });
 
         await unitOfWork.SaveChangesAsync(ct);
+        logger.LogWarning("Sale {SalesOrderId} refunded for store {StoreId}: status now {Status}",
+            order.Id, tenantContext.StoreId, order.Status);
         return order;
     }
 

@@ -1,6 +1,7 @@
 using Application.Common;
 using Domain;
 using Domain.Identity;
+using Microsoft.Extensions.Logging;
 using Shared.Exceptions;
 
 namespace Application.Identity;
@@ -16,7 +17,8 @@ public sealed class AuthApplicationService(
     IIdentityService identityService,
     IJwtTokenService jwtTokenService,
     IRefreshTokenService refreshTokenService,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ILogger<AuthApplicationService> logger)
 {
     public async Task<RegisterStoreResult> RegisterStoreAsync(RegisterStoreRequest request, CancellationToken ct)
     {
@@ -56,7 +58,14 @@ public sealed class AuthApplicationService(
 
         var user = await identityService.ValidateCredentialsAsync(store.Id, request.Email, request.Password, ct);
         if (user is null || !user.IsActive)
+        {
+            // Warning, not Information — a failed login is a security-
+            // relevant event worth being able to find in logs later (e.g.
+            // spotting a credential-stuffing pattern), which is exactly
+            // why the email is logged but the password never is, anywhere.
+            logger.LogWarning("Failed login attempt for {Email} in store {StoreSlug}", request.Email, request.StoreSlug);
             throw new NotFoundException("User", request.Email); // deliberately generic — see security-model.md
+        }
 
         var permissions = await identityService.GetPermissionsAsync(user.UserId, ct);
         var accessToken = jwtTokenService.GenerateAccessToken(user.UserId, user.StoreId, permissions);

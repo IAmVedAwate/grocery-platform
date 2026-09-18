@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Api.Authorization;
 using Api.Middleware;
 using Application.Catalog;
@@ -10,14 +11,46 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Compact;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Structured logging (docs/PRD.md §19). Replaces the default console
+// provider entirely rather than running alongside it. Framework
+// categories are pushed down to Warning — EF Core alone logs every SQL
+// command at Information, which floods real signal with noise; "log
+// everything at Information" is not the same thing as observability.
+// CorrelationIdMiddleware (registered below) pushes a per-request
+// CorrelationId into LogContext, so every line below is traceable back
+// to the request that produced it.
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext()
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("System", LogEventLevel.Warning);
+
+    // Humans read the dev console; a real deployment's log aggregator
+    // wants structured JSON, not a hand-formatted line — same "one value,
+    // one place, environment decides the shape" principle as everything
+    // else config-related in this project.
+    if (context.HostingEnvironment.IsDevelopment())
+        configuration.WriteTo.Console(outputTemplate:
+            "[{Timestamp:HH:mm:ss} {Level:u3}] {CorrelationId} {Message:lj}{NewLine}{Exception}");
+    else
+        configuration.WriteTo.Console(new CompactJsonFormatter());
+});
 
 // IMPORTANT: every config value below is resolved lazily via DI
 // (IConfiguration injected into a Configure<T> delegate, or an
@@ -115,6 +148,40 @@ builder.Services.AddAuthorization();
 builder.Services.AddExceptionHandler<AppExceptionHandler>();
 builder.Services.AddProblemDetails();
 
+// Rate limiting on auth endpoints (docs/security/security-model.md —
+// blunts credential-stuffing/brute-force). Fixed window per client IP;
+// QueueLimit 0 means an over-limit request is rejected immediately with
+// 429, never queued/delayed — for an abuse-protection policy, "wait and
+// retry" is the wrong shape, we want a hard no.
+//
+// The partitioner delegate below resolves IConfiguration from
+// httpContext.RequestServices — i.e. PER REQUEST, not once at startup.
+// AddRateLimiter's configureOptions callback runs immediately/eagerly
+// (unlike AddOptions<T>().Configure<IConfiguration>()), so capturing
+// `configuration` in a closure here would suffer the exact same
+// WebApplicationFactory-override-invisible bug documented in
+// docs/operations/troubleshooting.md. Reading it inside the per-request
+// delegate is how RateLimiterOptions supports the deferred pattern.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth", httpContext =>
+    {
+        var configuration = httpContext.RequestServices.GetRequiredService<IConfiguration>();
+        var permitLimit = int.TryParse(configuration["RATE_LIMIT_AUTH_PERMIT_LIMIT"], out var limit) ? limit : 10;
+        var windowSeconds = int.TryParse(configuration["RATE_LIMIT_AUTH_WINDOW_SECONDS"], out var seconds) ? seconds : 60;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromSeconds(windowSeconds),
+                QueueLimit = 0
+            });
+    });
+});
+
 builder.Services.AddCors();
 builder.Services.AddOptions<CorsOptions>()
     .Configure<IConfiguration>((options, configuration) =>
@@ -157,9 +224,16 @@ if (app.Environment.IsDevelopment())
     await scope.ServiceProvider.GetRequiredService<GroceryDbContext>().Database.MigrateAsync();
 }
 
+// CorrelationIdMiddleware and the request-logging line both need to wrap
+// literally everything else, including the exception handler, so a
+// correlation id and a logged summary exist even for a request that
+// blows up before reaching a controller.
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging();
 app.UseExceptionHandler(_ => { });
 app.UseHttpsRedirection();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

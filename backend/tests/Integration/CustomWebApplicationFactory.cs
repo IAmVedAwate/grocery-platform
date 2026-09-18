@@ -35,7 +35,14 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["JWT_SIGNING_KEY"] = TestJwtSigningKey,
                 ["JWT_ISSUER"] = TestJwtIssuer,
                 ["JWT_AUDIENCE"] = TestJwtAudience,
-                ["ALLOWED_WEB_ORIGIN"] = "http://localhost:3000,http://localhost:3001"
+                ["ALLOWED_WEB_ORIGIN"] = "http://localhost:3000,http://localhost:3001",
+                // The whole shared test run makes far more than 10
+                // auth requests a minute — that's the point of a shared
+                // container (docs/testing/testing-strategy.md), not abuse.
+                // RateLimitingTests overrides this back down per-test via
+                // WithWebHostBuilder to actually prove 429 triggers.
+                ["RATE_LIMIT_AUTH_PERMIT_LIMIT"] = "100000",
+                ["RATE_LIMIT_AUTH_WINDOW_SECONDS"] = "60"
             });
         });
     }
