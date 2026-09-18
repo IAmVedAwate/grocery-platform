@@ -92,6 +92,20 @@
       "problemMatcher": "$msCompile"
     },
     {
+      "label": "db: start",
+      "type": "shell",
+      "command": "docker compose --env-file ../.env -f docker-compose.yml up -d sqlserver",
+      "options": { "cwd": "${workspaceFolder}/deployment" },
+      "detail": "Starts the SQL Server container if Docker Desktop restarted or the host slept and it didn't come back — has restart: unless-stopped now, so this is mainly for when Docker Desktop itself wasn't running yet.",
+      "problemMatcher": []
+    },
+    {
+      "label": "db: status",
+      "type": "shell",
+      "command": "docker ps --filter name=quickstock-sqlserver --format 'table {{.Names}}\\t{{.Status}}'",
+      "problemMatcher": []
+    },
+    {
       "label": "web: install",
       "type": "shell",
       "command": "npm install",

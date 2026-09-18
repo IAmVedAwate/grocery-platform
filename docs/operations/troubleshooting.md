@@ -15,6 +15,14 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### SQL Server container stops silently; F5 throws a raw `SqlException`
+
+**Encountered:** 2026-09-18 (twice — once mid-Phase-1, once again after Phase 2), local development via VS Code's `API: Debug (.NET)` launch config
+**Symptom:** Starting the API in the debugger throws an unhandled `Microsoft.Data.SqlClient.SqlException`: *"A network-related or instance-specific error occurred while establishing a connection to SQL Server... The wait operation timed out."* No code change preceded it — the same debug session that worked yesterday just stops working.
+**Root cause:** `quickstock-sqlserver-1` had no restart policy, so anything that disrupted it — Docker Desktop restarting, the host going to sleep and resuming, resource pressure — left it stopped (`docker ps -a` showed `Exited (255)`) with nothing bringing it back automatically. The API itself is fine; it's just talking to a database that isn't there. This is the same underlying gap both times, not two different bugs.
+**Fix:** Two changes, matching "fix the actual cause, not just this one instance": (1) `deployment/docker-compose.yml` now sets `restart: unless-stopped` on both `sqlserver` and `api`, so Docker restarts them automatically after a crash or a Docker Desktop restart — it does *not* cover a full Windows reboot unless Docker Desktop is itself set to launch at login (a Docker Desktop setting, not something this repo controls). (2) Added a `db: start` task in `.vscode/tasks.json` for the remaining case — Docker Desktop wasn't running at all — so recovery is one task-run instead of remembering the `docker compose up -d sqlserver` invocation.
+**Prevention:** The exception message itself is enough to diagnose this class of problem — "wait operation timed out" trying to reach a *local* SQL Server almost always means the container isn't running, not a real network/config issue. Check `docker ps -a --filter name=quickstock` first before touching any code. The data itself was never at risk either time — `sqlserver-data` is a named volume, and a container restart or recreation doesn't touch it (verified via `sqlcmd` after recovery: `SELECT name FROM sys.databases WHERE name = 'QuickStock'` still returned a row both times).
+
 ### `docker-compose.yml` silently overrode the app's own CORS default
 
 **Encountered:** 2026-09-18, Phase 2 (first real-browser verification of the UI, end to end, against the Docker Compose stack)

@@ -3,6 +3,14 @@ name: quickstock
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2025-latest
+    # Restarts automatically if Docker Desktop hiccups, the container
+    # crashes, or the host resumes from sleep — without this, the
+    # container just stays down until someone notices the API can't
+    # connect (see docs/operations/troubleshooting.md). Does NOT
+    # auto-start on a full Windows reboot unless Docker Desktop itself is
+    # set to launch at login — that's a Docker Desktop setting, not
+    # something this file controls.
+    restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}
@@ -23,6 +31,7 @@ services:
     build:
       context: ..
       dockerfile: backend/src/Api/Dockerfile
+    restart: unless-stopped
     depends_on:
       sqlserver:
         condition: service_healthy

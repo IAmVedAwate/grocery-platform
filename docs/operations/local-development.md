@@ -66,7 +66,9 @@ Defined in [`deployment/docker-compose.yml`](../../deployment/docker-compose.yml
 | Service | Purpose | Notes |
 |---|---|---|
 | `api` | ASP.NET Core backend | Multi-stage Dockerfile (`backend/src/Api/Dockerfile`); runs as the non-root `app` user built into Microsoft's runtime image; waits on `sqlserver`'s health check; exposes `http://localhost:5292` |
-| `sqlserver` | SQL Server 2025 | Host port **1434**, not 1433 (leaves the default free for a local install or another project); data persisted in the `sqlserver-data` volume |
+| `sqlserver` | SQL Server 2025 | Host port **1434**, not 1433 (leaves the default free for a local install or another project); data persisted in the `sqlserver-data` volume; `restart: unless-stopped` |
+
+Both services restart automatically after a crash or a Docker Desktop restart. If SQL Server is down anyway (Docker Desktop wasn't running at all — `docker ps -a --filter name=quickstock` will show it `Exited`), run the **`db: start`** task from VS Code's Run/Debug panel (or `Terminal > Run Task`), or `cd deployment && docker compose --env-file ../.env -f docker-compose.yml up -d sqlserver`. **`db: status`** checks whether it's currently running. See [troubleshooting.md](./troubleshooting.md) for the full incident this was added for.
 
 The Next.js client is not containerized yet — `npm run dev` in `web/` is the local dev path (see [PRD.md §3 Non-Goals](../PRD.md#3-non-goals) territory: a `web` compose service is a reasonable Phase 3+ addition once the app has more than a scaffold to containerize).
 
