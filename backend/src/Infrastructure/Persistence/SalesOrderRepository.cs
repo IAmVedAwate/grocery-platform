@@ -14,9 +14,12 @@ public sealed class SalesOrderRepository(GroceryDbContext db) : ISalesOrderRepos
     public Task<SalesOrder?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct) =>
         Query().FirstOrDefaultAsync(o => o.IdempotencyKey == idempotencyKey, ct);
 
-    public async Task<(IReadOnlyList<SalesOrder> Items, int TotalCount)> ListAsync(int skip, int take, CancellationToken ct)
+    public async Task<(IReadOnlyList<SalesOrder> Items, int TotalCount)> ListAsync(int skip, int take, Guid? customerId, CancellationToken ct)
     {
         var query = Query(asNoTracking: true);
+        if (customerId.HasValue)
+            query = query.Where(o => o.CustomerId == customerId);
+
         var totalCount = await query.CountAsync(ct);
         var items = await query.OrderByDescending(o => o.CreatedAtUtc).Skip(skip).Take(take).ToListAsync(ct);
         return (items, totalCount);

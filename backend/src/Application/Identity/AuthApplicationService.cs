@@ -96,6 +96,49 @@ public sealed class AuthApplicationService(
 
         return new AuthTokens(accessToken, rotation.NewRawToken!);
     }
+
+    /// <summary>
+    /// Returns null whether the store doesn't exist, the email isn't
+    /// registered, or the account is deactivated — the caller (the
+    /// controller) must respond identically either way. This endpoint has
+    /// no email delivery to hide behind (no SMTP integration exists yet),
+    /// so it's the one place in this codebase where "don't leak whether an
+    /// account exists" has to be enforced entirely by the response shape,
+    /// not by a side channel.
+    /// </summary>
+    public async Task<string?> ForgotPasswordAsync(string storeSlug, string email, CancellationToken ct)
+    {
+        var store = await storeRepository.GetBySlugAsync(storeSlug, ct);
+        if (store is null)
+            return null;
+
+        var result = await identityService.GeneratePasswordResetTokenAsync(store.Id, email, ct);
+        if (result is null)
+        {
+            logger.LogInformation("Password reset requested for unknown/inactive account {Email} in store {StoreSlug}", email, storeSlug);
+            return null;
+        }
+
+        var (userId, token) = result.Value;
+        logger.LogInformation("Password reset token issued for user {UserId}", userId);
+        // userId travels with the token (both opaque to the client) so
+        // ResetPasswordAsync doesn't need a second lookup by email.
+        return $"{userId}:{token}";
+    }
+
+    public async Task ResetPasswordAsync(string resetHandle, string newPassword, CancellationToken ct)
+    {
+        var parts = resetHandle.Split(':', 2);
+        if (parts.Length != 2 || !Guid.TryParse(parts[0], out var userId))
+            throw new ValidationAppException(new Dictionary<string, string[]> { ["token"] = ["Reset token is invalid."] });
+
+        var storeId = await identityService.ResetPasswordAsync(userId, parts[1], newPassword, ct);
+        if (storeId is null)
+            throw new ValidationAppException(new Dictionary<string, string[]> { ["token"] = ["Reset token is invalid or expired."] });
+
+        auditWriter.RecordWithExplicitActor(storeId.Value, userId, "auth.password_reset_completed", "ApplicationUser", userId.ToString());
+        await unitOfWork.SaveChangesAsync(ct);
+    }
 }
 
 public sealed record RegisterStoreRequest(string StoreName, string Slug, string AdminEmail, string AdminPassword, string AdminDisplayName);

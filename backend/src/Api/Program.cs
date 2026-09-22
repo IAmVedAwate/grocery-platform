@@ -102,7 +102,12 @@ builder.Services
         options.User.RequireUniqueEmail = false;
     })
     .AddRoles<ApplicationRole>()
-    .AddEntityFrameworkStores<GroceryDbContext>();
+    .AddEntityFrameworkStores<GroceryDbContext>()
+    // AddIdentityCore (unlike the full AddIdentity) does not register the
+    // default token providers on its own — GeneratePasswordResetTokenAsync/
+    // ResetPasswordAsync need one (the same DataProtector-backed, time-
+    // limited token type password hashing itself relies on, ADR-004).
+    .AddDefaultTokenProviders();
 
 builder.Services.RemoveAll<IUserValidator<ApplicationUser>>();
 builder.Services.AddScoped<IUserValidator<ApplicationUser>, TenantScopedUserValidator>();

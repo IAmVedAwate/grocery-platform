@@ -40,6 +40,21 @@ public interface IIdentityService
     Task SetUserPermissionsAsync(Guid userId, IEnumerable<string> permissionKeys, CancellationToken ct);
 
     Task SetActiveAsync(Guid userId, bool isActive, CancellationToken ct);
+
+    /// <summary>
+    /// Looks up an active user by (store, email) and returns Identity's
+    /// own cryptographically-random, time-limited reset token — the same
+    /// token type/algorithm password hashing itself uses (ADR-004), not
+    /// hand-rolled. Returns null for "no such user" so the caller can give
+    /// an identical response either way (see AuthApplicationService —
+    /// forgot-password must not leak whether an email is registered).
+    /// </summary>
+    Task<(Guid UserId, string Token)?> GeneratePasswordResetTokenAsync(Guid storeId, string email, CancellationToken ct);
+
+    /// <returns>The user's StoreId if the token was valid and the password
+    /// was changed (needed by the caller to audit-log against the right
+    /// tenant), null if the token was invalid/expired.</returns>
+    Task<Guid?> ResetPasswordAsync(Guid userId, string token, string newPassword, CancellationToken ct);
 }
 
 public sealed record IdentityUserSnapshot(Guid UserId, Guid StoreId, string Email, string DisplayName, bool IsActive);

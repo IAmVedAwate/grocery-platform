@@ -15,6 +15,14 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### `AddIdentityCore` silently has no password-reset token provider
+
+**Encountered:** 2026-09-25, closing the Phase 1 password-reset gap
+**Symptom:** `POST /auth/forgot-password` for a real, active user returned `500`: `System.NotSupportedException: No IUserTwoFactorTokenProvider<TUser> named 'Default' is registered.`, thrown from inside `UserManager.GenerateUserTokenAsync`.
+**Root cause:** This project uses `AddIdentityCore<ApplicationUser>()` (not the full `AddIdentity<TUser, TRole>()`) specifically so nothing cookie/sign-in-related gets pulled in that a JWT-based API doesn't need. What that also means, less obviously: `AddIdentityCore` does **not** call `AddDefaultTokenProviders()` on your behalf the way `AddIdentity` does — password hashing worked the whole time (that's `PasswordHasher`, registered separately), but the token *provider* infrastructure `GeneratePasswordResetTokenAsync`/`ResetPasswordAsync` depend on was simply never registered, and nothing failed until the first real call actually needed a token provider by name.
+**Fix:** Added `.AddDefaultTokenProviders()` to the existing Identity builder chain in `Program.cs`, after `.AddEntityFrameworkStores<GroceryDbContext>()`.
+**Prevention:** `PasswordResetTests.cs`'s happy-path test (`ForgotPassword_ThenResetPassword_AllowsLoginWithTheNewPassword_NotTheOld`) exercises the real token round-trip end-to-end, not just that the endpoint returns *a* 200. General rule reinforced: when swapping `AddIdentity` for the slimmer `AddIdentityCore`, every piece of Identity functionality actually used has to be checked against what the slim version registers by default — it's easy to assume "Identity" is one atomic thing when it's really several independently-opt-in pieces.
+
 ### Low-stock notification sweep test asserted an exact count in a shared database
 
 **Encountered:** 2026-09-18, Phase 3 (background low-stock notification worker)

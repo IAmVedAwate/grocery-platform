@@ -151,6 +151,28 @@ public sealed class IdentityServiceImpl(
         await userManager.UpdateAsync(user);
     }
 
+    public async Task<(Guid UserId, string Token)?> GeneratePasswordResetTokenAsync(Guid storeId, string email, CancellationToken ct)
+    {
+        var normalizedEmail = email.Trim().ToUpperInvariant();
+        var user = await userManager.Users
+            .FirstOrDefaultAsync(u => u.StoreId == storeId && u.NormalizedEmail == normalizedEmail, ct);
+        if (user is null || !user.IsActive)
+            return null;
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        return (user.Id, token);
+    }
+
+    public async Task<Guid?> ResetPasswordAsync(Guid userId, string token, string newPassword, CancellationToken ct)
+    {
+        var user = await userManager.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+            return null;
+
+        var result = await userManager.ResetPasswordAsync(user, token, newPassword);
+        return result.Succeeded ? user.StoreId : null;
+    }
+
     public async Task<IdentityUserSnapshot?> ValidateCredentialsAsync(Guid storeId, string email, string password, CancellationToken ct)
     {
         var normalizedEmail = email.Trim().ToUpperInvariant();

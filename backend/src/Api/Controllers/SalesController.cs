@@ -13,12 +13,17 @@ namespace Api.Controllers;
 [Route("api/v1/sales-orders")]
 public sealed class SalesController(SalesApplicationService sales) : ControllerBase
 {
+    /// <summary>Filterable by customerId — this is also how a customer's
+    /// purchase history is served (docs/PRD.md §5.6): there's no separate
+    /// /customers/{id}/sales-orders endpoint, just this same list scoped
+    /// with a query parameter, consistent with every other filterable list
+    /// in this API (e.g. GET /products?search=).</summary>
     [HttpGet]
     [RequirePermission(Permissions.ReportsView)]
     public async Task<ActionResult<PagedResult<SalesOrderDto>>> List(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? customerId = null, CancellationToken ct = default)
     {
-        var result = await sales.ListAsync(new PageRequest(page, pageSize), ct);
+        var result = await sales.ListAsync(new PageRequest(page, pageSize), customerId, ct);
         return Ok(new PagedResult<SalesOrderDto>
         {
             Items = result.Items.Select(SalesOrderDto.From).ToList(), Page = result.Page, PageSize = result.PageSize, TotalCount = result.TotalCount

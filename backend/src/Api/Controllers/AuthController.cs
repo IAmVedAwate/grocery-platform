@@ -11,7 +11,7 @@ namespace Api.Controllers;
 [ApiController]
 [Route("api/v1/auth")]
 [EnableRateLimiting("auth")]
-public sealed class AuthController(AuthApplicationService authService) : ControllerBase
+public sealed class AuthController(AuthApplicationService authService, IWebHostEnvironment env) : ControllerBase
 {
     private const string RefreshCookieName = "refreshToken";
 
@@ -48,6 +48,29 @@ public sealed class AuthController(AuthApplicationService authService) : Control
         return Ok(new AccessTokenResponse(tokens.AccessToken));
     }
 
+    /// <summary>
+    /// No email/SMTP integration exists yet (docs/checkpoints/skills-inventory.md
+    /// names this gap explicitly) — a real deployment would send the reset
+    /// link by email and never put the token in an HTTP response at all.
+    /// In Development only, the token comes back directly so the flow is
+    /// actually completable/testable end-to-end without that infrastructure;
+    /// in every other environment the response is identical whether or not
+    /// the account exists, and the token goes nowhere the client can see.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto, CancellationToken ct)
+    {
+        var resetHandle = await authService.ForgotPasswordAsync(dto.StoreSlug, dto.Email, ct);
+        return Ok(new ForgotPasswordResponse(env.IsDevelopment() ? resetHandle : null));
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordDto dto, CancellationToken ct)
+    {
+        await authService.ResetPasswordAsync(dto.Token, dto.NewPassword, ct);
+        return NoContent();
+    }
+
     private void SetRefreshCookie(string rawToken)
     {
         Response.Cookies.Append(RefreshCookieName, rawToken, new CookieOptions
@@ -64,3 +87,6 @@ public sealed record RegisterStoreDto(string StoreName, string Slug, string Admi
 public sealed record RegisterStoreResponse(Guid StoreId, string Slug, Guid AdminUserId);
 public sealed record LoginDto(string StoreSlug, string Email, string Password);
 public sealed record AccessTokenResponse(string AccessToken);
+public sealed record ForgotPasswordDto(string StoreSlug, string Email);
+public sealed record ForgotPasswordResponse(string? ResetToken);
+public sealed record ResetPasswordDto(string Token, string NewPassword);

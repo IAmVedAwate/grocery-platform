@@ -95,7 +95,7 @@ Architecture isn't one label — this project stacks three separate decisions, e
 | JWT, refresh tokens | ✅ | Rotating, with reuse-detection (token-family revocation) |
 | Authorization model | ✅ | **Not RBAC** — permission keys are assigned directly per user (`UserPermissionEntity`), editable any time from Settings → Staff; a role is only ever consulted once, as the store-registration admin's starting bundle. See [authentication-flow.md](../architecture/authentication-flow.md#staff-accounts--per-user-permissions) |
 | secure configuration | ✅ | `.env`/`.env.local`, nothing in source control; Azure Key Vault is the documented Phase 4 plan, not yet built |
-| password reset | ❌ | Deferred by explicit choice — no SMTP/email integration exists yet to build a real reset-link flow against |
+| password reset | ✅ | Identity's own token-based flow (`GeneratePasswordResetTokenAsync`/`ResetPasswordAsync`), not hand-rolled. No SMTP integration exists, so the token is only ever exposed in the HTTP response in Development — a real deployment would need real email delivery before this is production-shaped, and `AuthController.ForgotPassword` says so directly |
 
 ### Testing
 | Item | Status | Note |

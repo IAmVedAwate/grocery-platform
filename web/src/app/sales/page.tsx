@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { NavBar } from "@/components/nav-bar";
@@ -11,9 +11,13 @@ import type { PagedResult, SalesOrderDto } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 
-export default function SalesHistoryPage() {
+function SalesHistoryContent() {
   const { accessToken, isLoading, authFetch } = useAuth();
   const router = useRouter();
+  // Customer purchase history (docs/PRD.md §5.6) is this same list, scoped
+  // by a query parameter — see SalesController.List's own remarks for why
+  // there's no separate endpoint for it.
+  const customerId = useSearchParams().get("customerId");
 
   const [result, setResult] = useState<PagedResult<SalesOrderDto> | null>(null);
   const [page, setPage] = useState(1);
@@ -22,12 +26,14 @@ export default function SalesHistoryPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const data = await authFetch<PagedResult<SalesOrderDto>>(`/api/v1/sales-orders?page=${page}&pageSize=${PAGE_SIZE}`);
+      const query = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+      if (customerId) query.set("customerId", customerId);
+      const data = await authFetch<PagedResult<SalesOrderDto>>(`/api/v1/sales-orders?${query}`);
       setResult(data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load sales history.");
     }
-  }, [authFetch, page]);
+  }, [authFetch, page, customerId]);
 
   useEffect(() => {
     if (!isLoading && !accessToken) router.push("/login");
@@ -46,7 +52,14 @@ export default function SalesHistoryPage() {
     <>
       <NavBar />
       <main className="mx-auto w-full max-w-4xl flex-1 p-6">
-        <h1 className="mb-6 text-xl font-semibold">Sales History</h1>
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Sales History</h1>
+          {customerId && (
+            <Link href="/sales" className="text-sm text-gray-500 underline">
+              Clear customer filter
+            </Link>
+          )}
+        </div>
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
         {!result ? (
@@ -103,5 +116,13 @@ export default function SalesHistoryPage() {
         )}
       </main>
     </>
+  );
+}
+
+export default function SalesHistoryPage() {
+  return (
+    <Suspense>
+      <SalesHistoryContent />
+    </Suspense>
   );
 }

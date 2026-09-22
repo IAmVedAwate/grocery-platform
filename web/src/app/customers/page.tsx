@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
@@ -109,6 +110,7 @@ export default function CustomersPage() {
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Phone</th>
                   <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -117,6 +119,11 @@ export default function CustomersPage() {
                     <td className="px-3 py-2">{c.name}</td>
                     <td className="px-3 py-2">{c.phone ?? "—"}</td>
                     <td className="px-3 py-2">{c.email ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <Link href={`/sales?customerId=${c.id}`} className="text-gray-900 underline">
+                        Purchase history
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -40,6 +40,11 @@ export default function LoginPage() {
           <Field label="Store slug" value={storeSlug} onChange={setStoreSlug} placeholder="sharma-general" />
           <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="owner@example.com" />
           <Field label="Password" type="password" value={password} onChange={setPassword} />
+          <p className="text-right text-sm">
+            <Link href="/forgot-password" className="text-gray-500 underline">
+              Forgot password?
+            </Link>
+          </p>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

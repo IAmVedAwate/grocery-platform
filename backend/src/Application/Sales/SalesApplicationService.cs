@@ -109,9 +109,9 @@ public sealed class SalesApplicationService(
     public async Task<SalesOrder> GetAsync(Guid id, CancellationToken ct) =>
         await salesOrders.GetByIdAsync(id, ct) ?? throw new NotFoundException(nameof(SalesOrder), id);
 
-    public async Task<PagedResult<SalesOrder>> ListAsync(PageRequest page, CancellationToken ct)
+    public async Task<PagedResult<SalesOrder>> ListAsync(PageRequest page, Guid? customerId, CancellationToken ct)
     {
-        var (items, totalCount) = await salesOrders.ListAsync(page.Skip, page.PageSize, ct);
+        var (items, totalCount) = await salesOrders.ListAsync(page.Skip, page.PageSize, customerId, ct);
         return new PagedResult<SalesOrder> { Items = items, Page = page.Page, PageSize = page.PageSize, TotalCount = totalCount };
     }
 
