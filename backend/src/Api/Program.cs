@@ -69,7 +69,24 @@ builder.Services.AddDbContext<GroceryDbContext>((sp, options) =>
     var configuration = sp.GetRequiredService<IConfiguration>();
     var connectionString = configuration["DB_CONNECTION_STRING"]
         ?? throw new InvalidOperationException("DB_CONNECTION_STRING is not configured.");
-    options.UseSqlServer(connectionString);
+    var retryCount = int.TryParse(configuration["SQL_RETRY_COUNT"], out var rc) ? rc : 3;
+    var retryMaxDelaySeconds = int.TryParse(configuration["SQL_RETRY_MAX_DELAY_SECONDS"], out var rd) ? rd : 5;
+
+    // Resilience for this system's one real external dependency
+    // (docs/checkpoints/skills-inventory.md). Deliberately EF Core's own
+    // connection resiliency, not a hand-rolled Polly policy wrapped
+    // around SaveChangesAsync — a generic retry wrapper that isn't
+    // execution-strategy-aware can retry on top of change-tracking state
+    // left over from a half-applied attempt, which is exactly the class
+    // of bug EF Core's IExecutionStrategy exists to prevent. Internally
+    // this *is* a retry policy (transient SQL errors — timeouts,
+    // connection drops — get retried with backoff); it's just the
+    // EF-Core-native mechanism instead of a second one bolted on top.
+    // Never retries on DbUpdateConcurrencyException (the RowVersion
+    // conflict this app already translates to 409, GroceryDbContext.cs)
+    // — that's a real business conflict, not a transient fault.
+    options.UseSqlServer(connectionString, sql =>
+        sql.EnableRetryOnFailure(retryCount, TimeSpan.FromSeconds(retryMaxDelaySeconds), errorNumbersToAdd: null));
 });
 builder.Services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<GroceryDbContext>());
 

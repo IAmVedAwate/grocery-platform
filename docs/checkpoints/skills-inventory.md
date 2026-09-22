@@ -61,7 +61,8 @@ Architecture isn't one label — this project stacks three separate decisions, e
 | Health Check, Rate Limiter, Background Worker patterns | ⭐⭐ | ✅ `/health/*`, auth rate limiting, `LowStockNotificationWorker` |
 | **Pluggable storage backend** (Strategy applied to infra) | ⭐⭐ | ✅ `IStorageService` → `LocalFileStorageService` today, Azure Blob a clean future swap-in with zero Application/Api changes |
 | Outbox pattern | ⭐⭐⭐ | ❌ PRD mentions it aspirationally; the actual worker is a simpler polling sweep — a documented simplification, not an oversight |
-| Circuit Breaker / Retry (Polly) | ⭐⭐⭐ | ❌ No resilience library anywhere |
+| **Retry with backoff** | ⭐⭐⭐ | ✅ EF Core's `EnableRetryOnFailure` on the SQL Server connection (`Program.cs`) — deliberately *not* a hand-rolled Polly policy wrapped around `SaveChangesAsync`: a generic retry wrapper that isn't execution-strategy-aware can retry on top of change-tracking state left over from a half-applied attempt. Literal Polly has no honest target yet — there's no outbound `HttpClient` in this codebase until the Phase 5 OpenAI integration exists |
+| Circuit Breaker | ⭐⭐ | ❌ Not used — same reasoning, no outbound network call exists yet to protect |
 | Saga, Specification | ⭐⭐ | ❌ Not used |
 
 ---
@@ -134,7 +135,7 @@ Architecture isn't one label — this project stacks three separate decisions, e
 | **on-device ML inference** | ✅ | ONNX Runtime running a real trained model in-process — a genuinely different skill from calling an LLM API, worth naming separately from "AI assistant" below |
 | queues | ❌ | Explicitly rejected, not skipped — [ADR-006](../decisions/ADR-006-background-processing-approach.md) documents why an in-process worker was chosen over Kafka/RabbitMQ |
 | scaling | ⚠️ | Addressed conceptually (stateless JWT auth) but never load-tested or deployed at scale |
-| failure handling | ⚠️ | Concurrency-safe checkout, idempotency keys, centralized exception handling — no Polly-based retry/circuit-breaker |
+| failure handling | ✅ | Concurrency-safe checkout, idempotency keys, centralized exception handling, **and** transient-fault retry with backoff on the SQL connection (`EnableRetryOnFailure`) — see the Design Patterns table above for why that's EF Core's own mechanism, not Polly |
 | observability | ✅ | Serilog, correlation IDs, `/health/live` + `/health/ready`; Application Insights is the one piece still Phase 4 |
 
 ### AI / LLM (Phase 5 — all deferred, decisions already made)
@@ -149,9 +150,8 @@ Not hidden, not excused — a plain list to close or consciously accept before i
 1. **No explicit transaction/isolation/locking demonstration.** Everything relies on EF Core's implicit per-`SaveChangesAsync` transaction — which *is* a real database transaction, just not an explicit one — so there's no `BeginTransaction`, isolation level, or pessimistic lock hint to point at. Deliberately not manufacturing a fake example for this: nothing in the current design has a genuine two-round-trip consistency need. It would have a natural home in a stock-transfer-between-locations feature (the schema already anticipates a `Transfer` movement type) if that ever gets built.
 2. **No cloud deployment / CD.** Phase 4, openly deferred — CI exists now, nothing deploys anywhere after it passes.
 3. **No AI/RAG code.** Phase 5, openly deferred — architecture decisions already made, nothing built.
-4. **No resilience library (Polly).** Failure handling exists at the business-logic level (idempotency, concurrency safety) but not at the infrastructure/network level.
 
-**Closed since the first version of this doc:** product price-change audit logging (`catalog.price_changed`, `ProductApplicationService.UpdateAsync`), a deliberate mocking example (`ProductApplicationServiceTests.cs`, Moq), and a real CI pipeline (`.github/workflows/ci.yml`) — all three were named gaps here and are now real, tested/verified code.
+**Closed since the first version of this doc:** product price-change audit logging (`catalog.price_changed`, `ProductApplicationService.UpdateAsync`), a deliberate mocking example (`ProductApplicationServiceTests.cs`, Moq), a real CI pipeline (`.github/workflows/ci.yml`), and transient-fault resilience on the SQL connection (`EnableRetryOnFailure`, verified via `SqlResiliencyTests.cs`) — the resilience item was asked for as "Polly" specifically, but the honest answer turned out to be *why not Polly here*: this system's only real external dependency is SQL Server, and EF Core's own execution-strategy-aware retry mechanism is the correct tool for it, not a generic policy wrapped around `SaveChangesAsync`. Literal Polly's honest target — an outbound `HttpClient` — doesn't exist until the Phase 5 OpenAI integration is built.
 
 ---
 
