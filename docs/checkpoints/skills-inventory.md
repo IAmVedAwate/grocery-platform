@@ -110,7 +110,8 @@ Architecture isn't one label — this project stacks three separate decisions, e
 |---|---|---|
 | Docker | ✅ | Multi-stage `Dockerfile`, non-root `$APP_UID`, `HEALTHCHECK` |
 | Docker Compose, container networking, environment variables | ✅ | `sqlserver` + `api` services, health-check-gated startup order, confirmed cross-container networking |
-| Azure (App Service/Container Apps, SQL, Blob Storage, Key Vault), Application Insights, deployment pipeline | ❌ | Phase 4, not started — `.github/workflows/` has only a README placeholder |
+| CI pipeline | ✅ | `.github/workflows/ci.yml` — restore/build/unit/architecture/integration tests (real Testcontainers SQL Server, not mocked), frontend lint/build, Docker image build. Every step verified locally with the exact same commands before committing, which caught a real pre-existing lint error that would otherwise have failed the first run |
+| Azure (App Service/Container Apps, SQL, Blob Storage, Key Vault), Application Insights, CD/deploy step | ❌ | Phase 4, not started — CI exists, there's no deploy stage after it yet |
 
 ### Business modules
 | Item | Status |
@@ -146,12 +147,11 @@ LLM basics, OpenAI API, structured output, function calling, embeddings, RAG, ve
 Not hidden, not excused — a plain list to close or consciously accept before interviews start.
 
 1. **No explicit transaction/isolation/locking demonstration.** Everything relies on EF Core's implicit per-`SaveChangesAsync` transaction — which *is* a real database transaction, just not an explicit one — so there's no `BeginTransaction`, isolation level, or pessimistic lock hint to point at. Deliberately not manufacturing a fake example for this: nothing in the current design has a genuine two-round-trip consistency need. It would have a natural home in a stock-transfer-between-locations feature (the schema already anticipates a `Transfer` movement type) if that ever gets built.
-2. **No CI/CD pipeline.** `.github/workflows/` is a placeholder.
-3. **No cloud deployment.** Phase 4, openly deferred.
-4. **No AI/RAG code.** Phase 5, openly deferred — architecture decisions already made, nothing built.
-5. **No resilience library (Polly).** Failure handling exists at the business-logic level (idempotency, concurrency safety) but not at the infrastructure/network level.
+2. **No cloud deployment / CD.** Phase 4, openly deferred — CI exists now, nothing deploys anywhere after it passes.
+3. **No AI/RAG code.** Phase 5, openly deferred — architecture decisions already made, nothing built.
+4. **No resilience library (Polly).** Failure handling exists at the business-logic level (idempotency, concurrency safety) but not at the infrastructure/network level.
 
-**Closed since the first version of this doc:** product price-change audit logging (`catalog.price_changed`, `ProductApplicationService.UpdateAsync`) and a deliberate mocking example (`ProductApplicationServiceTests.cs`, Moq) — both were named gaps here and are now real, tested code.
+**Closed since the first version of this doc:** product price-change audit logging (`catalog.price_changed`, `ProductApplicationService.UpdateAsync`), a deliberate mocking example (`ProductApplicationServiceTests.cs`, Moq), and a real CI pipeline (`.github/workflows/ci.yml`) — all three were named gaps here and are now real, tested/verified code.
 
 ---
 

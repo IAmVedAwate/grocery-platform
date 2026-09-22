@@ -17,6 +17,14 @@ export function ProductImage({ productId, hasImage, size = 40 }: { productId: st
 
   useEffect(() => {
     if (!hasImage) {
+      // Resetting to null here, not deriving it at render time, is
+      // deliberate: hasImage flipping false→true→false (upload, then
+      // remove) must drop the *stale* blob URL from the previous image,
+      // not just stop showing it — same "sync local state to a changing
+      // external resource" pattern already accepted elsewhere in this
+      // codebase (see the loadProducts()/loadStaff() effects), just
+      // synchronous here instead of after an await.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrl(null);
       return;
     }

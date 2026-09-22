@@ -1,0 +1,88 @@
+name: CI
+
+# docs/PRD.md §21 / .github/workflows/README.md: restore -> build -> unit
+# tests -> integration tests -> architecture tests -> Docker image build.
+# Architecture tests run before integration tests here even though the
+# doc lists integration first — they're near-instant (no container to
+# start), so a real architecture-rule violation fails the build in
+# seconds instead of after waiting on Testcontainers. No deploy step yet
+# (Phase 4, not built) — CI, not CD.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore backend/GroceryPlatform.slnx
+
+      - name: Build
+        run: dotnet build backend/GroceryPlatform.slnx --no-restore --configuration Debug
+
+      - name: Unit tests
+        run: dotnet test backend/tests/Unit/Unit.csproj --no-build --configuration Debug
+
+      - name: Architecture tests
+        run: dotnet test backend/tests/Architecture/Architecture.csproj --no-build --configuration Debug
+
+      # Testcontainers talks to the Docker daemon directly via the socket,
+      # not via GitHub Actions' `services:` container mechanism — nothing
+      # extra to configure, GitHub-hosted ubuntu runners already have
+      # Docker running. This is the real SQL Server 2025 integration
+      # suite (docs/testing/testing-strategy.md) — no mocks, no in-memory
+      # provider, same database engine production would use.
+      - name: Integration tests
+        run: dotnet test backend/tests/Integration/Integration.csproj --no-build --configuration Debug
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # next build runs the TypeScript compiler as part of the build step
+      # (see the npm-script list in web/package.json) — no separate
+      # `tsc --noEmit` step needed, it's already covered.
+      - name: Build
+        run: npm run build
+
+  docker:
+    # Only builds the image once the code it packages has actually passed
+    # its own tests — validates the shippable artifact after correctness
+    # is proven, not instead of it.
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Context is the repo root, not backend/ — the Dockerfile's own COPY
+      # paths are written relative to repo root (see
+      # deployment/docker-compose.yml's `context: ..` for the same thing
+      # from the compose file's perspective, one directory up).
+      - name: Build API image
+        run: docker build -f backend/src/Api/Dockerfile -t quickstock-api:ci .
