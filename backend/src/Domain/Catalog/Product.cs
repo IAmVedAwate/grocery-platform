@@ -21,6 +21,7 @@ public class Product
     public decimal TaxRatePercent { get; private set; }
     public bool IsActive { get; private set; }
     public int LowStockThreshold { get; private set; }
+    public string? ImageStorageKey { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
@@ -88,6 +89,24 @@ public class Product
         BrandId = brandId;
         UnitId = unitId;
         LowStockThreshold = lowStockThreshold;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>The old image (if any) is the caller's responsibility to
+    /// delete from storage — Domain has no storage dependency, so it only
+    /// ever knows the current key, never what came before it.</summary>
+    public void SetImage(string storageKey)
+    {
+        if (string.IsNullOrWhiteSpace(storageKey))
+            throw new ArgumentException("Storage key is required.", nameof(storageKey));
+
+        ImageStorageKey = storageKey;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void ClearImage()
+    {
+        ImageStorageKey = null;
         UpdatedAtUtc = DateTime.UtcNow;
     }
 

@@ -20,6 +20,7 @@ namespace Integration;
 public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2025-latest").Build();
+    private readonly string _storageRoot = Path.Combine(Path.GetTempPath(), "quickstock-test-storage", Guid.NewGuid().ToString("N"));
 
     public const string TestJwtSigningKey = "integration-test-signing-key-do-not-use-in-production-32bytes!";
     public const string TestJwtIssuer = "quickstock-api-test";
@@ -42,7 +43,8 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 // RateLimitingTests overrides this back down per-test via
                 // WithWebHostBuilder to actually prove 429 triggers.
                 ["RATE_LIMIT_AUTH_PERMIT_LIMIT"] = "100000",
-                ["RATE_LIMIT_AUTH_WINDOW_SECONDS"] = "60"
+                ["RATE_LIMIT_AUTH_WINDOW_SECONDS"] = "60",
+                ["STORAGE_LOCAL_PATH"] = _storageRoot
             });
         });
     }
@@ -60,5 +62,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
     {
         await base.DisposeAsync();
         await _container.DisposeAsync();
+        if (Directory.Exists(_storageRoot))
+            Directory.Delete(_storageRoot, recursive: true);
     }
 }

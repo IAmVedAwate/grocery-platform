@@ -18,6 +18,7 @@ export type ProductDto = {
   taxRatePercent: number;
   isActive: boolean;
   lowStockThreshold: number;
+  hasImage: boolean;
 };
 
 export type InventoryOverviewRow = {

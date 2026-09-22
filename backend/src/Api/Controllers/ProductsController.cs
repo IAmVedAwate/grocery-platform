@@ -66,13 +66,39 @@ public sealed class ProductsController(ProductApplicationService products) : Con
         await products.DeactivateAsync(id, ct);
         return NoContent();
     }
+
+    [HttpPut("{id:guid}/image")]
+    [RequirePermission(Permissions.CatalogManage)]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<IActionResult> SetImage(Guid id, IFormFile image, CancellationToken ct)
+    {
+        await using var stream = image.OpenReadStream();
+        await products.SetImageAsync(id, stream, image.ContentType, image.Length, ct);
+        return NoContent();
+    }
+
+    [HttpGet("{id:guid}/image")]
+    [RequirePermission(Permissions.CatalogRead)]
+    public async Task<IActionResult> GetImage(Guid id, CancellationToken ct)
+    {
+        var (content, contentType) = await products.GetImageAsync(id, ct);
+        return File(content, contentType);
+    }
+
+    [HttpDelete("{id:guid}/image")]
+    [RequirePermission(Permissions.CatalogManage)]
+    public async Task<IActionResult> RemoveImage(Guid id, CancellationToken ct)
+    {
+        await products.RemoveImageAsync(id, ct);
+        return NoContent();
+    }
 }
 
 public sealed record CreateProductDto(string Sku, string Name, decimal Price, decimal TaxRatePercent, string? Barcode, Guid? CategoryId, Guid? BrandId, Guid? UnitId, int LowStockThreshold);
 public sealed record UpdateProductDto(string Name, decimal Price, decimal TaxRatePercent, string? Barcode, Guid? CategoryId, Guid? BrandId, Guid? UnitId, int LowStockThreshold);
 
-public sealed record ProductDto(Guid Id, string Sku, string? Barcode, string Name, decimal Price, decimal TaxRatePercent, bool IsActive, int LowStockThreshold)
+public sealed record ProductDto(Guid Id, string Sku, string? Barcode, string Name, decimal Price, decimal TaxRatePercent, bool IsActive, int LowStockThreshold, bool HasImage)
 {
     public static ProductDto From(Domain.Catalog.Product p) =>
-        new(p.Id, p.Sku, p.Barcode, p.Name, p.Price, p.TaxRatePercent, p.IsActive, p.LowStockThreshold);
+        new(p.Id, p.Sku, p.Barcode, p.Name, p.Price, p.TaxRatePercent, p.IsActive, p.LowStockThreshold, p.ImageStorageKey is not null);
 }

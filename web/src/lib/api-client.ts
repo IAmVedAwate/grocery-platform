@@ -37,19 +37,33 @@ export async function apiFetch<T>(
   accessToken: string | null,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await rawFetch(path, accessToken, options);
+  if (response.status === 204) return undefined as T;
+  if (!response.ok) await parseProblemDetails(response);
+  return (await response.json()) as T;
+}
+
+/** For binary responses (product images) — apiFetch always parses JSON,
+ * which would fail on an image body. */
+export async function apiFetchBlob(path: string, accessToken: string | null): Promise<Blob> {
+  const response = await rawFetch(path, accessToken, {});
+  if (!response.ok) await parseProblemDetails(response);
+  return response.blob();
+}
+
+async function rawFetch(path: string, accessToken: string | null, options: RequestInit): Promise<Response> {
+  // FormData sets its own multipart boundary in the Content-Type header —
+  // forcing application/json here would silently break every file upload.
+  const isFormData = options.body instanceof FormData;
+  return fetch(`${API_BASE_URL}${path}`, {
     ...options,
     credentials: "include",
     headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...options.headers,
     },
   });
-
-  if (response.status === 204) return undefined as T;
-  if (!response.ok) await parseProblemDetails(response);
-  return (await response.json()) as T;
 }
 
 export { API_BASE_URL };

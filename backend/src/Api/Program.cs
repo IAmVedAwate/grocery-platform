@@ -99,6 +99,12 @@ builder.Services.AddScoped<IRefreshTokenService, RefreshTokenServiceImpl>();
 builder.Services.AddScoped<IStoreRepository, StoreRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IAuditWriter, Infrastructure.Audit.AuditWriter>();
+
+// Local filesystem only for now (docs/PRD.md §26) — STORAGE_PROVIDER=azureBlob
+// is a documented Phase 4 migration target (a second IStorageService
+// implementation selected here), not implemented yet, so there's nothing
+// to branch on at registration time.
+builder.Services.AddScoped<Application.Common.IStorageService, Infrastructure.Storage.LocalFileStorageService>();
 builder.Services.AddScoped<AuthApplicationService>();
 builder.Services.AddScoped<Application.Identity.UserManagementApplicationService>();
 builder.Services.AddScoped<ProductApplicationService>();

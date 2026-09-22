@@ -20,6 +20,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Name).IsRequired().HasMaxLength(200);
         builder.Property(p => p.Price).HasColumnType("decimal(18,2)");
         builder.Property(p => p.TaxRatePercent).HasColumnType("decimal(5,2)");
+        builder.Property(p => p.ImageStorageKey).HasMaxLength(128);
 
         builder.HasIndex(p => new { p.StoreId, p.Sku }).IsUnique();
         builder.HasIndex(p => new { p.StoreId, p.Barcode }).IsUnique().HasFilter("[Barcode] IS NOT NULL");

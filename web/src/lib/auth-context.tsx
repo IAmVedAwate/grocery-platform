@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiFetch, ApiError } from "./api-client";
+import { apiFetch, apiFetchBlob, ApiError } from "./api-client";
 
 type AuthState = {
   accessToken: string | null;
@@ -25,6 +25,7 @@ type AuthState = {
   }) => Promise<void>;
   logout: () => void;
   authFetch: <T>(path: string, options?: RequestInit) => Promise<T>;
+  authFetchBlob: (path: string) => Promise<Blob>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -109,9 +110,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setToken],
   );
 
+  const authFetchBlob = useCallback(
+    async (path: string): Promise<Blob> => {
+      try {
+        return await apiFetchBlob(path, tokenRef.current);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          const refreshed = await apiFetch<AccessTokenResponse>(
+            "/api/v1/auth/refresh",
+            null,
+            { method: "POST" },
+          ).catch(() => null);
+          if (refreshed) {
+            setToken(refreshed.accessToken);
+            return apiFetchBlob(path, refreshed.accessToken);
+          }
+          setToken(null);
+        }
+        throw error;
+      }
+    },
+    [setToken],
+  );
+
   const value = useMemo(
-    () => ({ accessToken, isLoading, login, registerStore, logout, authFetch }),
-    [accessToken, isLoading, login, registerStore, logout, authFetch],
+    () => ({ accessToken, isLoading, login, registerStore, logout, authFetch, authFetchBlob }),
+    [accessToken, isLoading, login, registerStore, logout, authFetch, authFetchBlob],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

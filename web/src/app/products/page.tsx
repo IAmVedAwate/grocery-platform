@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { Field } from "@/components/field";
 import { NavBar } from "@/components/nav-bar";
+import { ProductImage } from "@/components/product-image";
 import type { PagedResult, ProductDto } from "@/lib/types";
 
 const PAGE_SIZE = 20;
@@ -28,6 +29,8 @@ export default function ProductsPage() {
   const [barcode, setBarcode] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => {
     setListError(null);
@@ -88,6 +91,21 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleImageChange(productId: string, file: File) {
+    setImageError(null);
+    setUploadingId(productId);
+    try {
+      const body = new FormData();
+      body.append("image", file);
+      await authFetch(`/api/v1/products/${productId}/image`, { method: "PUT", body });
+      await loadProducts();
+    } catch (err) {
+      setImageError(err instanceof ApiError ? err.message : "Could not upload image.");
+    } finally {
+      setUploadingId(null);
+    }
+  }
+
   if (isLoading || !accessToken) return null;
 
   const totalPages = result ? Math.max(1, Math.ceil(result.totalCount / PAGE_SIZE)) : 1;
@@ -130,6 +148,7 @@ export default function ProductsPage() {
       </div>
 
       {listError && <p className="mb-3 text-sm text-red-600">{listError}</p>}
+      {imageError && <p className="mb-3 text-sm text-red-600">{imageError}</p>}
 
       {!result ? (
         <p className="text-sm text-gray-500">Loading…</p>
@@ -140,6 +159,7 @@ export default function ProductsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-gray-200 text-gray-500">
               <tr>
+                <th className="px-3 py-2">Image</th>
                 <th className="px-3 py-2">SKU</th>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Price</th>
@@ -150,6 +170,25 @@ export default function ProductsPage() {
             <tbody>
               {result.items.map((p) => (
                 <tr key={p.id} className="border-b border-gray-100 last:border-0">
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <ProductImage productId={p.id} hasImage={p.hasImage} />
+                      <label className="cursor-pointer text-xs text-gray-500 underline">
+                        {uploadingId === p.id ? "Uploading…" : p.hasImage ? "Change" : "Upload"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={uploadingId === p.id}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (file) void handleImageChange(p.id, file);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </td>
                   <td className="px-3 py-2">{p.sku}</td>
                   <td className="px-3 py-2">{p.name}</td>
                   <td className="px-3 py-2">{p.price.toFixed(2)}</td>
