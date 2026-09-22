@@ -9,4 +9,17 @@ namespace Application.Common;
 public interface IAuditWriter
 {
     void Record(string action, string entityType, string entityId, object? metadata = null);
+
+    /// <summary>
+    /// For the one action that happens BEFORE a tenant/actor is
+    /// resolvable from the request (a successful login itself — there is
+    /// no JWT on the incoming login request, so ITenantContext.IsAuthenticated
+    /// is false and StoreId/UserId can't be inferred the normal way).
+    /// Failed login attempts stay Serilog-only (AuthApplicationService),
+    /// not written here — an unauthenticated caller can trigger arbitrarily
+    /// many failed attempts (the rate limiter bounds the rate, not the
+    /// eventual count), and that's log volume, not an audit-worthy event
+    /// tied to a real actor.
+    /// </summary>
+    void RecordWithExplicitActor(Guid storeId, Guid actorUserId, string action, string entityType, string entityId, object? metadata = null);
 }

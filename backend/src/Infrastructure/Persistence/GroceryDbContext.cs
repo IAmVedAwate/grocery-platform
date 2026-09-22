@@ -25,6 +25,7 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
     public DbSet<Domain.Catalog.Unit> Units => Set<Domain.Catalog.Unit>();
     public DbSet<PermissionEntity> Permissions => Set<PermissionEntity>();
     public DbSet<RolePermissionEntity> RolePermissions => Set<RolePermissionEntity>();
+    public DbSet<UserPermissionEntity> UserPermissions => Set<UserPermissionEntity>();
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
     public DbSet<Domain.Audit.AuditLogEntry> AuditLogEntries => Set<Domain.Audit.AuditLogEntry>();
     public DbSet<Domain.Inventory.InventoryItem> InventoryItems => Set<Domain.Inventory.InventoryItem>();
@@ -146,6 +147,16 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
             b.HasKey(rp => new { rp.RoleId, rp.PermissionKey });
             b.HasOne<ApplicationRole>().WithMany().HasForeignKey(rp => rp.RoleId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne<PermissionEntity>().WithMany().HasForeignKey(rp => rp.PermissionKey).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // The authoritative per-user permission set (see UserPermissionEntity's
+        // own remarks) — IdentityServiceImpl.GetPermissionsAsync reads
+        // exclusively from this table, not from role membership.
+        builder.Entity<UserPermissionEntity>(b =>
+        {
+            b.HasKey(up => new { up.UserId, up.PermissionKey });
+            b.HasOne<ApplicationUser>().WithMany().HasForeignKey(up => up.UserId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<PermissionEntity>().WithMany().HasForeignKey(up => up.PermissionKey).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<RefreshTokenEntity>(b =>

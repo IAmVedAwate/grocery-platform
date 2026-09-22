@@ -100,6 +100,7 @@ builder.Services.AddScoped<IStoreRepository, StoreRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IAuditWriter, Infrastructure.Audit.AuditWriter>();
 builder.Services.AddScoped<AuthApplicationService>();
+builder.Services.AddScoped<Application.Identity.UserManagementApplicationService>();
 builder.Services.AddScoped<ProductApplicationService>();
 builder.Services.AddScoped<Application.Catalog.ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<Application.Catalog.CategoryApplicationService>();

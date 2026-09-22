@@ -54,13 +54,24 @@ See [ADR-004](../decisions/ADR-004-authentication-architecture.md) for why this 
    this TenantContext, and TenantContext itself only trusts the token
 ```
 
+## Staff Accounts & Per-User Permissions
+
+Permissions are assigned directly to a user (`UserPermissionEntity`: `UserId` + `PermissionKey`), not derived from a role at read time — `IIdentityService.GetPermissionsAsync` reads this table only. Two creation paths exist:
+
+- **Store registration** (`AuthApplicationService.RegisterStoreAsync` → `IdentityServiceImpl.CreateUserAsync`): the one owner/admin account is still assigned the `Admin` role (`AspNetUserRoles`), and that role's bundle (`DefaultRoles.PermissionBundles`, all of `Permissions.All`) is copied into `UserPermissionEntity` once, at creation time. This is the *only* place role membership is ever consulted for authorization purposes.
+- **Staff invite** (`POST /api/v1/users` → `IdentityServiceImpl.CreateStaffUserAsync`): no role is assigned at all. The caller (an admin holding `users.manage`) sends an explicit list of permission keys; those become the new user's `UserPermissionEntity` rows directly.
+
+An admin edits a staff member's permissions any time via `PUT /api/v1/users/{id}/permissions` (full replace, not additive) from the Staff settings page. Because `GetPermissionsAsync` is called at both login *and* refresh, a permission change takes effect on that user's next token refresh — within `JWT_ACCESS_TOKEN_MINUTES` (default 15) — with no separate token-revocation step needed.
+
+This was a deliberate choice over role-based access control: the PRD's persona list (§4) already implied a handful of roles, but a real store owner's staffing doesn't cleanly fit fixed buckets ("this cashier can also approve purchase orders, that one can't") — a direct per-person permission checklist expresses that without inventing new role names for every combination.
+
 ## Why the Tenant Boundary Can't Be Spoofed by a Client
 
 A malicious client cannot claim to be a different store by sending a different `X-Store-Id` header or similar, because no code path reads the tenant from anything other than the cryptographically-signed JWT claims validated by ASP.NET Core's authentication middleware before the request reaches application code. This is the specific answer to "how do you actually stop tenant A from reading tenant B's data" — see [ADR-002](../decisions/ADR-002-multi-tenancy-strategy.md).
 
-## Password Reset / Account Lifecycle (Phase 1/1.x)
+## Password Reset / Account Lifecycle
 
-Standard Identity-backed reset-token flow (time-limited, single-use token emailed or displayed in dev). Deactivation flips `User.IsActive` and is checked at both login and refresh — see above.
+**Password reset is explicitly deferred, not built** — this section previously described it as done; it wasn't, and that mismatch is worth naming rather than leaving. There's no email/SMTP integration in this project, so a real reset-link flow needs that decided first. Deactivation *is* implemented: flips `ApplicationUser.IsActive`, checked at both login and refresh (see above) — an active session isn't automatically killed, but the next refresh fails, bounding the window to one access-token lifetime.
 
 ## Interview Questions This Creates
 

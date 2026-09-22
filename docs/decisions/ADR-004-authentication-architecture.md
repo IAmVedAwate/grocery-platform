@@ -25,7 +25,7 @@ The platform needs secure authentication for multi-tenant users, a session model
 
 - **ASP.NET Core Identity** for credential storage and password hashing.
 - **JWT short-lived access token + rotating refresh token with reuse detection.**
-- **Claims-based, permission-string authorization policies**, with roles used only as a convenient way to assign a bundle of permissions, never checked directly in business logic.
+- **Claims-based, permission-string authorization policies.** As of the staff-management feature, permissions are assigned directly per user (`UserPermissionEntity`), editable individually from Settings — not derived from role membership at read time. Roles (`ApplicationRole`/`RolePermissionEntity`) still exist and are used exactly once, as the starting bundle for the store-registration admin account (`IdentityServiceImpl.CreateUserAsync`); every staff account created afterward (`CreateStaffUserAsync`) has no role at all, only an explicit permission set. This is a deliberate step past "RBAC with extra steps" — see `docs/architecture/authentication-flow.md` for the mechanics and the reasoning for not modeling this as roles.
 
 ## Reasoning
 

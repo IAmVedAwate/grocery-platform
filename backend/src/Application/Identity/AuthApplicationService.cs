@@ -18,6 +18,7 @@ public sealed class AuthApplicationService(
     IJwtTokenService jwtTokenService,
     IRefreshTokenService refreshTokenService,
     IUnitOfWork unitOfWork,
+    IAuditWriter auditWriter,
     ILogger<AuthApplicationService> logger)
 {
     public async Task<RegisterStoreResult> RegisterStoreAsync(RegisterStoreRequest request, CancellationToken ct)
@@ -70,6 +71,9 @@ public sealed class AuthApplicationService(
         var permissions = await identityService.GetPermissionsAsync(user.UserId, ct);
         var accessToken = jwtTokenService.GenerateAccessToken(user.UserId, user.StoreId, permissions);
         var refreshToken = await refreshTokenService.IssueAsync(user.UserId, ct);
+
+        auditWriter.RecordWithExplicitActor(user.StoreId, user.UserId, "auth.login_succeeded", "ApplicationUser", user.UserId.ToString());
+
         await unitOfWork.SaveChangesAsync(ct);
 
         return new AuthTokens(accessToken, refreshToken);

@@ -132,3 +132,11 @@ export type CategoryDto = {
   id: string;
   name: string;
 };
+
+export type StaffUserDto = {
+  id: string;
+  email: string;
+  displayName: string;
+  isActive: boolean;
+  permissions: string[];
+};
