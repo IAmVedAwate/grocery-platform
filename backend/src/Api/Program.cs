@@ -184,7 +184,9 @@ builder.Services.AddSingleton<Client>(sp =>
 builder.Services.AddSingleton(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
-    var chatModel = configuration["GEMINI_CHAT_MODEL"] ?? "gemini-3.5-flash-lite";
+    // Default matches the model proven working against this SDK in the
+    // reference RAG project this integration was adapted from — not a guess.
+    var chatModel = configuration["GEMINI_CHAT_MODEL"] ?? "gemini-3.6-flash";
     return sp.GetRequiredService<Client>().AsIChatClient(chatModel);
 });
 // A lazy WRAPPER, not the real generator directly — CommunityToolkit's
