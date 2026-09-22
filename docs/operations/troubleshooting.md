@@ -15,6 +15,17 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### Wrong password reported "User ... was not found" — wrong status, wrong message, and a timing leak underneath
+
+**Encountered:** 2026-09-23, found by the developer simply mistyping their own password on the login page
+**Symptom:** Logging in with a valid email and an incorrect password returned `404` with `"User 'ved@urbanweb.host' was not found."` — telling a legitimate user their account had vanished, and echoing their submitted email back in the response body.
+**Root cause:** Three layers, each hiding the next.
+1. `AuthApplicationService.LoginAsync` threw `NotFoundException("User", request.Email)`, carrying a code comment claiming it was "deliberately generic". It wasn't: `NotFoundException` formats as `"{entity} '{key}' was not found."`, so the message literally asserted non-existence and interpolated the caller's email.
+2. There was **no `401` mapping at all** in `AppExceptionHandler` — no `UnauthorizedAppException` existed — so the only available "auth failed" shapes were `404` or `403`. The 404 wasn't so much chosen as defaulted into. Refresh-token failures had landed on `403` for the same reason, and leaked *why* (`"Refresh token has already been used; session revoked."`, `"User is deactivated."`).
+3. Even after equalizing status and body, an enumeration oracle remained in **timing**: `ValidateCredentialsAsync` returned immediately when no user matched, while a wrong password paid full PBKDF2 cost. Measured at ~12ms versus ~400ms — trivially distinguishable, so the identical responses achieved nothing on their own.
+**Fix:** Added `UnauthorizedAppException` (default message `"Invalid credentials."`) mapped to `401`. Login now throws it for all four failure modes — unknown store, unknown email, wrong password, deactivated account — with the reason logged server-side only. Refresh failures likewise return `401` with one flat "session expired" message. For timing, `ValidateCredentialsAsync` verifies against a static throwaway hash when no user matches, and `LoginAsync` routes an unknown store through the same credential check using a non-matching store id rather than short-circuiting. Verified live: ~0.16s across all three failure modes.
+**Prevention:** `AuthFlowTests.Login_Failures_AreAll401_AndByteForByteIdentical` now asserts the property that actually matters — it compares full response bodies across wrong-password / unknown-email / unknown-store and asserts the email isn't echoed — instead of the old `Login_WithWrongPassword_ReturnsNotFound`, whose name encoded the bug as intended behaviour and whose green tick actively concealed it. General rules: (1) a comment asserting a security property ("deliberately generic") is worth nothing unless a test asserts it too — write the test, then trust the comment; (2) when equalizing responses to prevent enumeration, check **status, body, and elapsed time** — leaving any one unequalized defeats the other two; (3) if the only status codes an error layer can express are 404/403/409/400, `401` failures will get mis-shaped into whichever fits worst — fix the layer, not the call site.
+
 ### Setting a real Gemini key in user-secrets made the test suite start billing live API calls
 
 **Encountered:** 2026-09-23, Phase 5 — immediately after the first real `GEMINI_API_KEY` was configured locally

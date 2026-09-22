@@ -17,6 +17,13 @@ public sealed class IdentityServiceImpl(
     RoleManager<ApplicationRole> roleManager,
     GroceryDbContext db) : IIdentityService
 {
+    // Hashed once at startup, not per request — computing it on every
+    // failed login would cost double the intended work. See the use site
+    // in ValidateCredentialsAsync for why this exists at all.
+    private static readonly ApplicationUser TimingDecoyUser = new();
+    private static readonly string TimingDecoyHash =
+        new PasswordHasher<ApplicationUser>().HashPassword(TimingDecoyUser, "timing-equalization-decoy");
+
     public async Task<Guid> CreateUserAsync(Guid storeId, string email, string password, string displayName, IEnumerable<string> roles, CancellationToken ct)
     {
         var normalizedEmail = email.Trim().ToUpperInvariant();
@@ -179,7 +186,17 @@ public sealed class IdentityServiceImpl(
         var user = await userManager.Users
             .FirstOrDefaultAsync(u => u.StoreId == storeId && u.NormalizedEmail == normalizedEmail, ct);
         if (user is null)
+        {
+            // Verify against a throwaway hash before giving up. Password
+            // hashing is deliberately expensive (PBKDF2), so returning
+            // early here would make an unknown email answer in ~1ms while a
+            // wrong password takes ~100ms — response time alone would then
+            // reveal which emails are registered, defeating the point of
+            // AuthApplicationService returning an identical error for both.
+            // The result is discarded; only the elapsed work matters.
+            userManager.PasswordHasher.VerifyHashedPassword(TimingDecoyUser, TimingDecoyHash, password);
             return null;
+        }
 
         var passwordValid = await userManager.CheckPasswordAsync(user, password);
         return passwordValid ? ToSnapshot(user) : null;

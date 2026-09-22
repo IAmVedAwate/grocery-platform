@@ -14,7 +14,7 @@
 | 201 | Successful creation; `Location` header set to the new resource |
 | 204 | Successful action with no body (e.g., delete/deactivate) |
 | 400 | Validation failure — malformed request, business-rule violation surfaced as client error |
-| 401 | No valid authentication presented |
+| 401 | No valid authentication presented — **including a failed login or an unusable refresh token**, which are authentication failures, not "not found" and not "forbidden". Every login failure returns this same status with the same `"Invalid credentials."` body regardless of which part was wrong; see [security-model.md](../security/security-model.md#account-enumeration-on-login--closed-on-all-three-channels) |
 | 403 | Authenticated but lacking the required permission |
 | 404 | Not found — **also** returned when a resource exists but belongs to another tenant (never 403 for cross-tenant access, which would leak existence) |
 | 409 | Conflict — concurrency conflict (stale `RowVersion`), duplicate idempotency key, business-state conflict (e.g., approving an already-approved PO) |

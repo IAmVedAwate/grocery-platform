@@ -32,7 +32,7 @@ public class PasswordResetTests(CustomWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
 
         var loginOld = await client.PostAsJsonAsync("/api/v1/auth/login", new { storeSlug = store.Slug, email = store.Email, password = AuthTestHelper.DefaultPassword });
-        Assert.Equal(HttpStatusCode.NotFound, loginOld.StatusCode); // generic — same as any other bad-credentials response
+        Assert.Equal(HttpStatusCode.Unauthorized, loginOld.StatusCode); // generic — same as any other bad-credentials response
 
         var loginNew = await client.PostAsJsonAsync("/api/v1/auth/login", new { storeSlug = store.Slug, email = store.Email, password = newPassword });
         loginNew.EnsureSuccessStatusCode();

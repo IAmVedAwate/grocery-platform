@@ -20,8 +20,21 @@ public class AuthFlowTests(CustomWebApplicationFactory factory)
         Assert.False(string.IsNullOrWhiteSpace(registered.AccessToken));
     }
 
+    /// <summary>
+    /// A failed login must be 401 — not 404, which both answers an
+    /// existence question the caller hasn't earned an answer to and reads
+    /// to a real user as "your account is gone" when they simply fumbled
+    /// their password.
+    ///
+    /// Asserting the status alone would be too weak: the property that
+    /// actually matters is that a wrong password, an unregistered email
+    /// and an unknown store are *indistinguishable*, so this compares the
+    /// full response body across all three rather than trusting that they
+    /// happen to line up. It also asserts the submitted email is not
+    /// echoed back, which the old implementation did.
+    /// </summary>
     [Fact]
-    public async Task Login_WithWrongPassword_ReturnsNotFound()
+    public async Task Login_Failures_AreAll401_AndByteForByteIdentical()
     {
         var client = factory.CreateClient();
         var suffix = Guid.NewGuid().ToString("N")[..8];
@@ -37,16 +50,36 @@ public class AuthFlowTests(CustomWebApplicationFactory factory)
             adminDisplayName = "Test Owner"
         });
 
-        var loginResponse = await client.PostAsJsonAsync("/api/v1/auth/login", new
-        {
-            storeSlug = slug,
-            email,
-            password = "TotallyWrongPassword123!"
-        });
+        var wrongPassword = await Login(client, slug, email, "TotallyWrongPassword123!");
+        var unknownEmail = await Login(client, slug, $"nobody-{suffix}@test.local", AuthTestHelper.DefaultPassword);
+        var unknownStore = await Login(client, $"no-such-store-{suffix}", email, AuthTestHelper.DefaultPassword);
 
-        // Deliberately the same generic "not found" as an unknown email —
-        // see docs/security/security-model.md (don't reveal which part failed).
-        Assert.Equal(HttpStatusCode.NotFound, loginResponse.StatusCode);
+        foreach (var (name, response) in new[]
+                 {
+                     ("wrong password", wrongPassword),
+                     ("unknown email", unknownEmail),
+                     ("unknown store", unknownStore)
+                 })
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, response.Status);
+            Assert.DoesNotContain(email, response.Body);
+            Assert.DoesNotContain("not found", response.Body, StringComparison.OrdinalIgnoreCase);
+            Assert.True(response.Body.Contains("Invalid credentials", StringComparison.OrdinalIgnoreCase),
+                $"'{name}' should use the single shared credentials message, got: {response.Body}");
+        }
+
+        // The real enumeration guard: an attacker can't tell these apart.
+        Assert.Equal(wrongPassword.Body, unknownEmail.Body);
+        Assert.Equal(wrongPassword.Body, unknownStore.Body);
+    }
+
+    private static async Task<(HttpStatusCode Status, string Body)> Login(HttpClient client, string storeSlug, string email, string password)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { storeSlug, email, password });
+        var body = await response.Content.ReadAsStringAsync();
+        // traceId is per-request by design and says nothing about the account.
+        body = System.Text.RegularExpressions.Regex.Replace(body, "\"traceId\":\"[^\"]*\"", "\"traceId\":\"<scrubbed>\"");
+        return (response.StatusCode, body);
     }
 
     [Fact]

@@ -37,7 +37,34 @@ See [testing/testing-strategy.md](../testing/testing-strategy.md) for how these 
 ## Abuse Protection
 
 - Rate limiting on `/auth/login`, `/auth/refresh`, `/auth/register` to blunt credential stuffing/brute force.
-- Generic error messages on login failure (do not reveal whether the email exists).
+
+### Account enumeration on login — closed on all three channels
+
+Every login failure — unknown store slug, unregistered email, wrong password, deactivated account — returns an **identical** `401` with the single message `Invalid credentials.`. The distinguishing reason is written to the server log, never to the response. This is enforced, not just intended:
+
+| Channel | How it's equalized |
+|---|---|
+| **Status code** | All four modes throw `UnauthorizedAppException` → `401`. Never `404` — that both answers an existence question an unauthenticated caller hasn't earned and reads to a real user as "your account is gone" when they just mistyped a password. |
+| **Response body** | One shared default message; the submitted email is never echoed back. `AuthFlowTests.Login_Failures_AreAll401_AndByteForByteIdentical` compares the full bodies rather than trusting they happen to match. |
+| **Response time** | Password hashing (PBKDF2) is deliberately slow, so returning early on an unknown email/store would answer in ~12ms versus ~160ms and leak by timing alone. `IdentityServiceImpl.ValidateCredentialsAsync` verifies against a throwaway hash when no user matches, and `LoginAsync` routes an unknown store through the same check with a non-matching store id. Measured: ~0.16s across all three modes. |
+
+An earlier version of this system got the first two wrong (404, `"User 'x' was not found."`) and the third wrong by omission — see [troubleshooting.md](../operations/troubleshooting.md).
+
+**Refresh-token failures are also `401`, not `403`** — a token we can't validate is an authentication failure, not an authorization one — with one flat message (`"Your session has expired. Please sign in again."`) whether the token is unrecognized, already-rotated (reuse detected), expired, or belongs to a deleted/deactivated user. The client's correct reaction is the same in every case, so distinguishing them would only tell whoever holds a stolen token how far they got.
+
+### Residual: `forgot-password` timing (measured, judged acceptable)
+
+`/auth/forgot-password` already returns an identical `200` with no body detail whether the store, email, or neither exists. Its timing was measured rather than assumed: known email ~13–56ms, unknown email ~11–17ms, unknown store ~8ms. Unlike login, the spread is single-digit milliseconds and the ranges **overlap between runs**, because reset-token generation is HMAC-based and cheap — there's no PBKDF2-scale asymmetry to hide. Combined with rate limiting on the endpoint, this is not considered a practical oracle and has been left alone rather than padded with artificial work. Recorded here because "we measured it and decided" is a different claim from "we didn't look" — if an SMTP integration ever lands, the send path will add real asymmetry and this needs re-measuring.
+
+### Where revealing existence *is* correct
+
+Not every "already exists" message is a leak, and blanket-genericizing them would make the product worse:
+
+- `"A user with email 'x' already exists for this store."` — requires `users.manage`; that caller can already list every user in the store.
+- `"Barcode 'x' is already in use."` — requires `catalog.manage`, tenant-scoped to data the caller owns.
+- `"Store slug 'x' is already taken."` — unauthenticated, but slug availability is inherent to any signup form, exactly like a username check.
+
+The distinguishing question is whether the message tells an **unauthenticated or unauthorized** caller something about data they can't otherwise see.
 
 ## Secrets Management
 

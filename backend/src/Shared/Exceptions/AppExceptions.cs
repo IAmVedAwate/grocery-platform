@@ -21,3 +21,20 @@ public sealed class ConflictAppException(string message) : AppException(message)
 
 public sealed class ForbiddenAppException(string message = "You do not have permission to perform this action.")
     : AppException(message);
+
+/// <summary>
+/// Authentication failed: the caller is not who they claim to be, or
+/// isn't identified at all — 401, not 403 (which means "we know who you
+/// are, and you still may not do this") and not 404 (which answers a
+/// question about whether a resource exists that an unauthenticated
+/// caller has no business getting an answer to).
+///
+/// The default message is deliberately the only thing every failure mode
+/// says. Whether the store slug is wrong, the email is unregistered, the
+/// password is wrong, or the account is deactivated, the caller gets one
+/// identical sentence — anything more specific is an account-enumeration
+/// oracle. The distinguishing detail belongs in the server-side log,
+/// where an operator can see it and an attacker cannot.
+/// </summary>
+public sealed class UnauthorizedAppException(string message = "Invalid credentials.")
+    : AppException(message);

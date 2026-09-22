@@ -54,18 +54,36 @@ public sealed class AuthApplicationService(
 
     public async Task<AuthTokens> LoginAsync(LoginRequest request, CancellationToken ct)
     {
-        var store = await storeRepository.GetBySlugAsync(request.StoreSlug, ct)
-            ?? throw new NotFoundException(nameof(Store), request.StoreSlug);
+        // Every failure below throws the SAME UnauthorizedAppException with
+        // the same default message. An unknown store, an unregistered email,
+        // a wrong password and a deactivated account are indistinguishable
+        // to the caller by status code, body, or wording — that's the point.
+        // Anything that varies between these cases is an oracle someone can
+        // use to work out which accounts exist. The reason is logged instead,
+        // where an operator can see it and an attacker cannot.
+        var store = await storeRepository.GetBySlugAsync(request.StoreSlug, ct);
 
-        var user = await identityService.ValidateCredentialsAsync(store.Id, request.Email, request.Password, ct);
-        if (user is null || !user.IsActive)
+        // An unknown store still runs a full credential check, against a
+        // store id nothing can match. That looks pointless and isn't: it
+        // makes an unknown slug cost the same password-hashing work as a
+        // real failed login. Short-circuiting here instead answered in
+        // ~12ms versus ~400ms, which left store slugs enumerable by
+        // response time even though the response bodies are identical.
+        var user = await identityService.ValidateCredentialsAsync(
+            store?.Id ?? Guid.Empty, request.Email, request.Password, ct);
+
+        if (store is null || user is null || !user.IsActive)
         {
             // Warning, not Information — a failed login is a security-
             // relevant event worth being able to find in logs later (e.g.
             // spotting a credential-stuffing pattern), which is exactly
             // why the email is logged but the password never is, anywhere.
-            logger.LogWarning("Failed login attempt for {Email} in store {StoreSlug}", request.Email, request.StoreSlug);
-            throw new NotFoundException("User", request.Email); // deliberately generic — see security-model.md
+            var reason = store is null ? "unknown store slug"
+                : user is null ? "no matching active credentials"
+                : "account deactivated";
+            logger.LogWarning("Failed login attempt for {Email} in store {StoreSlug} (reason: {Reason})",
+                request.Email, request.StoreSlug, reason);
+            throw new UnauthorizedAppException();
         }
 
         var permissions = await identityService.GetPermissionsAsync(user.UserId, ct);
@@ -81,14 +99,28 @@ public sealed class AuthApplicationService(
 
     public async Task<AuthTokens> RefreshAsync(string presentedRefreshToken, CancellationToken ct)
     {
+        // 401, not 403: a bad refresh token means "we can't establish who you
+        // are", which is authentication, not authorization. The client's only
+        // correct reaction to any of these is the same — send the user back to
+        // log in — so it gains nothing from knowing which one happened, while
+        // "token not recognized" vs "already used; session revoked" vs "user is
+        // deactivated" would tell whoever holds a stolen token exactly how far
+        // they got and whether the account still exists. The specific reason is
+        // logged server-side; the response is one flat sentence.
         var rotation = await refreshTokenService.RotateAsync(presentedRefreshToken, ct);
         if (!rotation.Succeeded || rotation.UserId is null)
-            throw new ForbiddenAppException(rotation.FailureReason ?? "Refresh token is invalid.");
+        {
+            logger.LogWarning("Refresh token rotation failed (reason: {Reason})", rotation.FailureReason ?? "unspecified");
+            throw new UnauthorizedAppException("Your session has expired. Please sign in again.");
+        }
 
-        var user = await identityService.GetUserAsync(rotation.UserId.Value, ct)
-            ?? throw new ForbiddenAppException("User no longer exists.");
-        if (!user.IsActive)
-            throw new ForbiddenAppException("User is deactivated.");
+        var user = await identityService.GetUserAsync(rotation.UserId.Value, ct);
+        if (user is null || !user.IsActive)
+        {
+            logger.LogWarning("Refresh rejected for user {UserId} (reason: {Reason})",
+                rotation.UserId, user is null ? "user no longer exists" : "account deactivated");
+            throw new UnauthorizedAppException("Your session has expired. Please sign in again.");
+        }
 
         var permissions = await identityService.GetPermissionsAsync(user.UserId, ct);
         var accessToken = jwtTokenService.GenerateAccessToken(user.UserId, user.StoreId, permissions);
