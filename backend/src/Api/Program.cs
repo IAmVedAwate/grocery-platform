@@ -5,6 +5,7 @@ using Api.Middleware;
 using Application.Catalog;
 using Application.Common;
 using Application.Identity;
+using Google.GenAI;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,10 +14,12 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.VectorData;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Events;
@@ -159,6 +162,55 @@ builder.Services.AddScoped<Application.Notifications.INotificationRepository, No
 builder.Services.AddScoped<Application.Notifications.NotificationApplicationService>();
 builder.Services.AddScoped<Application.Notifications.ILowStockNotificationGenerator, Infrastructure.Notifications.LowStockNotificationGenerator>();
 builder.Services.AddHostedService<Api.BackgroundServices.LowStockNotificationWorker>();
+
+// Phase 5 — AI assistant (tool-calling, docs/PRD.md §15) + RAG over
+// uploaded documents (§16). Every registration below is a lazy DI
+// factory — nothing here runs at app startup, so the app boots and every
+// non-AI feature works fine with no GEMINI_API_KEY configured at all;
+// the key is only read (and the Gemini client only constructed) the
+// first time something actually resolves IChatClient/IEmbeddingGenerator,
+// i.e. the first real call to an AI endpoint. This is deliberate: no
+// token spend just from running the app or its test suite (see
+// CustomWebApplicationFactory, which substitutes a fake IChatClient/
+// IEmbeddingGenerator so the integration suite never touches the real
+// API at all — docs/decisions/ADR-005).
+builder.Services.AddSingleton<Client>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var apiKey = configuration["GEMINI_API_KEY"]
+        ?? throw new InvalidOperationException("GEMINI_API_KEY is not configured.");
+    return new Client(apiKey: apiKey);
+});
+builder.Services.AddSingleton(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var chatModel = configuration["GEMINI_CHAT_MODEL"] ?? "gemini-3.5-flash-lite";
+    return sp.GetRequiredService<Client>().AsIChatClient(chatModel);
+});
+// A lazy WRAPPER, not the real generator directly — CommunityToolkit's
+// VectorStore (registered below) resolves IEmbeddingGenerator the moment
+// IT is constructed, which happens for every AI-adjacent class including
+// ones that never actually embed anything (DocumentsController's
+// List/Delete). Registering the real Gemini-backed generator directly
+// here would make GEMINI_API_KEY required just to list documents — see
+// LazyGeminiEmbeddingGenerator.cs.
+builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp => new Infrastructure.Ai.LazyGeminiEmbeddingGenerator(sp));
+// Same SQL Server the rest of the app already uses — the vector store is
+// a table in the same database (ADR-003: SQL Server native vector over a
+// second, dedicated vector DB), not a new piece of infrastructure.
+builder.Services.AddSqlServerVectorStore(
+    connectionStringProvider: sp => sp.GetRequiredService<IConfiguration>()["DB_CONNECTION_STRING"]
+        ?? throw new InvalidOperationException("DB_CONNECTION_STRING is not configured."),
+    optionsProvider: sp => new CommunityToolkit.VectorData.SqlServer.SqlServerVectorStoreOptions
+    {
+        EmbeddingGenerator = sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>()
+    });
+
+builder.Services.AddScoped<Application.Ai.IDocumentRepository, DocumentRepository>();
+builder.Services.AddScoped<Application.Ai.DocumentApplicationService>();
+builder.Services.AddScoped<Application.Ai.IDocumentIngestionService, Infrastructure.Ai.DocumentIngestionServiceImpl>();
+builder.Services.AddScoped<Infrastructure.Ai.AiTools>();
+builder.Services.AddScoped<Application.Ai.IAiAssistantService, Infrastructure.Ai.GeminiAiAssistantService>();
 
 // --- AuthN/AuthZ ---
 builder.Services

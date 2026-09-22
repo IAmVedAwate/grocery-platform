@@ -1,9 +1,12 @@
 using Infrastructure.Persistence;
+using Integration.Fakes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.MsSql;
 using Xunit;
 
@@ -46,6 +49,21 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["RATE_LIMIT_AUTH_WINDOW_SECONDS"] = "60",
                 ["STORAGE_LOCAL_PATH"] = _storageRoot
             });
+        });
+
+        // No GEMINI_API_KEY is configured for tests (see .env.example) —
+        // this swap is what makes that possible for the document/RAG
+        // pipeline specifically. The chunking → embed → SQL Server vector
+        // upsert → tenant-scoped search path is exercised for real; only
+        // the embedding call itself is faked (FakeEmbeddingGenerator),
+        // never the real Gemini API. The chat/tool-calling agent loop
+        // (IChatClient) is deliberately NOT faked here — see AiTools.cs
+        // and docs/testing/testing-strategy.md for why that's reserved
+        // for one manual, deliberate live smoke test instead.
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IEmbeddingGenerator<string, Embedding<float>>>();
+            services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(new FakeEmbeddingGenerator());
         });
     }
 

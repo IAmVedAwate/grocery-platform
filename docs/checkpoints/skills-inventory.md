@@ -61,8 +61,8 @@ Architecture isn't one label — this project stacks three separate decisions, e
 | Health Check, Rate Limiter, Background Worker patterns | ⭐⭐ | ✅ `/health/*`, auth rate limiting, `LowStockNotificationWorker` |
 | **Pluggable storage backend** (Strategy applied to infra) | ⭐⭐ | ✅ `IStorageService` → `LocalFileStorageService` today, Azure Blob a clean future swap-in with zero Application/Api changes |
 | Outbox pattern | ⭐⭐⭐ | ❌ PRD mentions it aspirationally; the actual worker is a simpler polling sweep — a documented simplification, not an oversight |
-| **Retry with backoff** | ⭐⭐⭐ | ✅ EF Core's `EnableRetryOnFailure` on the SQL Server connection (`Program.cs`) — deliberately *not* a hand-rolled Polly policy wrapped around `SaveChangesAsync`: a generic retry wrapper that isn't execution-strategy-aware can retry on top of change-tracking state left over from a half-applied attempt. Literal Polly has no honest target yet — there's no outbound `HttpClient` in this codebase until the Phase 5 OpenAI integration exists |
-| Circuit Breaker | ⭐⭐ | ❌ Not used — same reasoning, no outbound network call exists yet to protect |
+| **Retry with backoff** | ⭐⭐⭐ | ✅ EF Core's `EnableRetryOnFailure` on the SQL Server connection (`Program.cs`) — deliberately *not* a hand-rolled Polly policy wrapped around `SaveChangesAsync`: a generic retry wrapper that isn't execution-strategy-aware can retry on top of change-tracking state left over from a half-applied attempt. Phase 5 introduced a real outbound `HttpClient` (Gemini API) that Polly *would* have an honest target on — not yet added; see "Real Gaps" below |
+| Circuit Breaker | ⭐⭐ | ❌ Not used — the Gemini client is the one outbound network call that could justify it, and it hasn't been added there either (same named gap as Polly retry) |
 | Saga, Specification | ⭐⭐ | ❌ Not used |
 
 ---
@@ -138,8 +138,19 @@ Architecture isn't one label — this project stacks three separate decisions, e
 | failure handling | ✅ | Concurrency-safe checkout, idempotency keys, centralized exception handling, **and** transient-fault retry with backoff on the SQL connection (`EnableRetryOnFailure`) — see the Design Patterns table above for why that's EF Core's own mechanism, not Polly |
 | observability | ✅ | Serilog, correlation IDs, `/health/live` + `/health/ready`; Application Insights is the one piece still Phase 4 |
 
-### AI / LLM (Phase 5 — all deferred, decisions already made)
-LLM basics, OpenAI API, structured output, function calling, embeddings, RAG, vector search, retrieval quality, prompt engineering, Semantic Kernel, agents, guardrails, evaluation — ❌ all, zero code written. Locked decisions to explain if asked *why not yet*: OpenAI direct over Azure OpenAI ([ADR-005](../decisions/ADR-005-openai-direct-vs-azure-openai.md)), SQL Server native `VECTOR` type over a dedicated vector DB ([ADR-003](../decisions/ADR-003-sql-server-native-vector-vs-pgvector-vs-azure-ai-search.md)).
+### AI / LLM (Phase 5 — built)
+| Skill | Status | Notes |
+|---|---|---|
+| LLM function/tool calling | ✅ | 8-tool registry (`AiTools.cs`) wired through `Microsoft.Agents.AI`'s agent loop (`GeminiAiAssistantService.cs`) — see [ADR-010](../decisions/ADR-010-agent-orchestration-microsoft-extensions-ai.md) |
+| Embeddings | ✅ | Gemini embeddings via `Microsoft.Extensions.AI`'s `IEmbeddingGenerator`, auto-embedded on vector-store upsert |
+| RAG / vector search | ✅ | SQL Server 2025 native `vector` column via `CommunityToolkit.VectorData.SqlServer` — [ADR-003](../decisions/ADR-003-sql-server-native-vector-vs-pgvector-vs-azure-ai-search.md); tenant-scoped retrieval proven by a dedicated integration test (`SearchDocumentsTenantIsolationTests.cs`), same rigor as the relational tenant-isolation suite |
+| Text chunking | ✅ | Paragraph-aware, pure/dependency-free, unit-tested (`TextChunkerTests.cs`) — no overlap (documented simplification) |
+| Provider abstraction | ✅ | Built against `Microsoft.Extensions.AI`'s `IChatClient`/`IEmbeddingGenerator`, not a vendor SDK directly — proven by an actual provider pivot, not just a plan (OpenAI → Gemini, [ADR-009](../decisions/ADR-009-llm-provider-gemini-direct.md)) |
+| Semantic Kernel | ❌ | Deliberately not used — [ADR-010](../decisions/ADR-010-agent-orchestration-microsoft-extensions-ai.md) explains why `Microsoft.Extensions.AI` + `Microsoft.Agents.AI` fit this scope better |
+| Structured output schemas | ⚠️ | Tool-call arguments are schema-validated automatically (`AIFunctionFactory` generates JSON schema from C# method signatures); the final assistant answer is free text with a separate citations list, not itself a JSON-schema-validated structured output |
+| AI interaction observability | ❌ | No dedicated interaction log (prompt/tool-calls/latency/outcome) — standard request logging (Serilog + correlation IDs) covers it the same as any endpoint, nothing AI-specific yet |
+| Adversarial prompt-injection testing | ❌ | Not tested — the system prompt instructs the model to treat retrieved content as data, not instructions, but no adversarial document has been run against it |
+| Real LLM call in automated tests | ❌ (deliberately) | The automated suite never spends real Gemini tokens — `FakeEmbeddingGenerator` covers the storage/retrieval pipeline for real; the agent/tool-calling loop is covered by one manual, deliberate smoke test instead. See "Testing Philosophy" in [ai-architecture.md](../architecture/ai-architecture.md#testing-philosophy--minimum-tokens) |
 
 ---
 
@@ -147,11 +158,12 @@ LLM basics, OpenAI API, structured output, function calling, embeddings, RAG, ve
 
 Not hidden, not excused — a plain list to close or consciously accept before interviews start.
 
-1. **No explicit transaction/isolation/locking demonstration.** Everything relies on EF Core's implicit per-`SaveChangesAsync` transaction — which *is* a real database transaction, just not an explicit one — so there's no `BeginTransaction`, isolation level, or pessimistic lock hint to point at. Deliberately not manufacturing a fake example for this: nothing in the current design has a genuine two-round-trip consistency need. It would have a natural home in a stock-transfer-between-locations feature (the schema already anticipates a `Transfer` movement type) if that ever gets built.
-2. **No cloud deployment / CD.** Phase 4, openly deferred — CI exists now, nothing deploys anywhere after it passes.
-3. **No AI/RAG code.** Phase 5, openly deferred — architecture decisions already made, nothing built.
+1. **No explicit transaction/isolation/locking demonstration.** Everything relies on EF Core's implicit per-`SaveChangesAsync` transaction — which *is* a real database transaction, just not an explicit one — so there's no `BeginTransaction`, isolation level, or pessimistic lock hint to point at. Deliberately not manufacturing a fake example for this: nothing in the current design has a genuine two-round-trip consistency need. It would have a natural home in a stock-transfer-between-locations feature (the schema already anticipates a `Transfer` movement type) if that ever gets built. (Reviewed and explicitly accepted as not needed — not an oversight.)
+2. **No cloud deployment / CD.** Phase 4, openly deferred to a near-term follow-up (days, not the far future) — CI exists now, nothing deploys anywhere after it passes.
+3. **No Polly/HTTP resilience around the Gemini client.** Phase 5 introduced this codebase's first real outbound `HttpClient` (the Gemini API, via `Google.GenAI`) — the "Polly has no honest target yet" reasoning below no longer holds now that one exists. Not added: the SDK's own retry behavior hasn't been verified, and today a Gemini call failure just bubbles up as a 500, which is acceptable for a portfolio demo but is a real, named gap before calling this production-ready.
+4. **No AI interaction-level observability, no adversarial prompt-injection test.** See the AI/LLM table above — both are known, named gaps, not oversights.
 
-**Closed since the first version of this doc:** product price-change audit logging (`catalog.price_changed`, `ProductApplicationService.UpdateAsync`), a deliberate mocking example (`ProductApplicationServiceTests.cs`, Moq), a real CI pipeline (`.github/workflows/ci.yml`), and transient-fault resilience on the SQL connection (`EnableRetryOnFailure`, verified via `SqlResiliencyTests.cs`) — the resilience item was asked for as "Polly" specifically, but the honest answer turned out to be *why not Polly here*: this system's only real external dependency is SQL Server, and EF Core's own execution-strategy-aware retry mechanism is the correct tool for it, not a generic policy wrapped around `SaveChangesAsync`. Literal Polly's honest target — an outbound `HttpClient` — doesn't exist until the Phase 5 OpenAI integration is built.
+**Closed since the first version of this doc:** product price-change audit logging (`catalog.price_changed`, `ProductApplicationService.UpdateAsync`), a deliberate mocking example (`ProductApplicationServiceTests.cs`, Moq), a real CI pipeline (`.github/workflows/ci.yml`), transient-fault resilience on the SQL connection (`EnableRetryOnFailure`, verified via `SqlResiliencyTests.cs` — the resilience item was asked for as "Polly" specifically, but the honest answer turned out to be *why not Polly here*: this system's only real external dependency at the time was SQL Server, and EF Core's own execution-strategy-aware retry mechanism is the correct tool for it, not a generic policy wrapped around `SaveChangesAsync`), password reset, customer purchase history, and **Phase 5's AI tool-calling registry + RAG pipeline** (Gemini via `Microsoft.Extensions.AI`, SQL Server native vector storage, tenant-scoped retrieval — see the AI/LLM table above and [ai-architecture.md](../architecture/ai-architecture.md)).
 
 ---
 

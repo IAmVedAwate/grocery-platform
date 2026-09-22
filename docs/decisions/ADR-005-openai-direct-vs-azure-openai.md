@@ -1,6 +1,8 @@
 # ADR-005: LLM Provider — OpenAI Direct vs. Azure OpenAI
 
-**Status:** Accepted — decided in Phase 1 planning, implemented in Phase 5
+**Status:** Superseded by [ADR-009](./ADR-009-llm-provider-gemini-direct.md) — kept as the historical record of the original Phase 1 reasoning; see ADR-009 for why the actual Phase 5 implementation uses Gemini instead.
+
+**Status (original):** Accepted — decided in Phase 1 planning, implemented in Phase 5
 
 ## Problem
 

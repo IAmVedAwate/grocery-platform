@@ -142,3 +142,22 @@ export type StaffUserDto = {
   isActive: boolean;
   permissions: string[];
 };
+
+export type DocumentDto = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  uploadedAtUtc: string;
+};
+
+export type DocumentCitation = {
+  documentId: string;
+  fileName: string;
+  snippet: string;
+};
+
+export type AssistantAnswer = {
+  text: string;
+  toolsUsed: string[];
+  citations: DocumentCitation[];
+};

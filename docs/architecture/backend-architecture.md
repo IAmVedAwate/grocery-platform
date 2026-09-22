@@ -7,11 +7,12 @@ backend/
 ├── src/
 │   ├── Api/              ASP.NET Core host: controllers/minimal APIs, middleware, DI wiring, DTOs
 │   ├── Application/      Use cases per module (e.g. Sales.CreateSaleOrder), orchestration, validation,
-│   │                     interfaces the Infrastructure layer implements (IRepository, IStorageService, ILlmClient)
+│   │                     interfaces the Infrastructure layer implements (IRepository, IStorageService)
 │   ├── Domain/            Entities, value objects, domain business rules, domain events — no EF Core,
 │   │                     no ASP.NET Core, no external SDK references
 │   ├── Infrastructure/    EF Core DbContext + configurations + migrations, repository implementations,
-│   │                     Blob Storage adapter, OpenAI adapter, Identity integration
+│   │                     Blob Storage adapter, Gemini adapter (via Microsoft.Extensions.AI's
+│   │                     provider-neutral IChatClient/IEmbeddingGenerator — see ADR-009), Identity integration
 │   └── Shared/            Cross-cutting: Problem Details error model, correlation ID, audit-log writer,
 │                          permission constants
 └── tests/
@@ -27,9 +28,9 @@ Api  ──depends on──▶  Application  ──depends on──▶  Domain
 Infrastructure  ──depends on──▶  Application (interfaces)  +  Domain (entities)
 ```
 
-- `Domain` has zero outward dependencies — no EF Core, no ASP.NET Core, no OpenAI SDK. It is pure C#: entities and business rules that could be unit tested without a running process.
-- `Application` depends only on `Domain` and defines the interfaces (`IProductRepository`, `IStorageService`, `ILlmClient`, `IUnitOfWork`) that `Infrastructure` implements — this is the Dependency Inversion half of SOLID doing real work, not decoration.
-- `Infrastructure` is the only layer allowed to reference EF Core, Azure SDKs, or the OpenAI SDK.
+- `Domain` has zero outward dependencies — no EF Core, no ASP.NET Core, no AI SDK. It is pure C#: entities and business rules that could be unit tested without a running process.
+- `Application` depends only on `Domain` and defines the interfaces (`IProductRepository`, `IStorageService`, `IUnitOfWork`) that `Infrastructure` implements — this is the Dependency Inversion half of SOLID doing real work, not decoration. The AI tool registry (`AiTools`) is the one exception worth naming: it lives in `Infrastructure`, not behind an `Application`-level interface, because it depends on `Microsoft.Extensions.AI`'s own already-provider-neutral abstractions (`IChatClient`, `IEmbeddingGenerator`) directly — wrapping those in a second, project-specific interface would be indirection with no real benefit (see [ADR-009](../decisions/ADR-009-llm-provider-gemini-direct.md)).
+- `Infrastructure` is the only layer allowed to reference EF Core, Azure SDKs, or the Gemini SDK (`Google.GenAI`).
 - `Api` wires everything together via DI at startup and exposes controllers/endpoints; it contains no business logic itself — a controller action calls into `Application`, nothing more.
 
 An `Architecture` test project asserts these rules automatically (e.g., "no type in `Domain` may reference `Microsoft.EntityFrameworkCore`") so the boundary can't silently erode as the codebase grows — this is the concrete, testable version of "Clean Architecture," not just a folder-naming convention (per the planning brief's explicit warning against treating Clean Architecture as "four folders only").

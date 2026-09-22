@@ -16,6 +16,18 @@
          outside narrow free-tier cases. Not something to carry silently in
          a portfolio project meant to be run/deployed freely. -->
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
+    <!-- AI/RAG (docs/decisions/ADR-005, ADR-003). Google.GenAI is Google's
+         official .NET Gemini SDK; .AsIChatClient()/.AsIEmbeddingGenerator()
+         adapt it to Microsoft.Extensions.AI's provider-neutral interfaces
+         (IChatClient / IEmbeddingGenerator<string, Embedding<float>>), which
+         is what the rest of this codebase actually depends on — not the
+         Gemini SDK directly. Microsoft.Agents.AI supplies AIFunctionFactory
+         and IChatClient.AsAIAgent(...) for tool-calling. Combination
+         verified against .NET 10 + SQL Server 2025's native vector type in
+         a separate reference project before adopting it here. -->
+    <PackageReference Include="Google.GenAI" Version="1.21.1" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" />
+    <PackageReference Include="CommunityToolkit.VectorData.SqlServer" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>

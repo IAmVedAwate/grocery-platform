@@ -99,23 +99,23 @@ Full write-up, with file/line references and interview answers in first person: 
 
 ---
 
-## Phase 5 — AI, RAG & Interview Polish (P1/P2)
+## Phase 5 — AI, RAG & Interview Polish (P1/P2) — Built
 
-**Scope**
-- OpenAI function-calling tool registry (`get_inventory`, `search_products`, `get_sales_summary`, `get_low_stock_items`, `get_purchase_order_status`, `get_supplier_status`, `get_customer_summary`), tenant- and permission-scoped execution.
-- Structured output schemas for tool arguments and final answers.
-- RAG pipeline: document upload → chunk → embed → SQL Server native `VECTOR` storage → tenant-scoped similarity retrieval → grounded answer with citations.
-- AI interaction logging (request, tool calls, latency, retrieval sources) for basic evaluation.
-- AI guardrails implemented and tested: tool allow-list, max tool-call loop count, prompt-injection-aware system framing.
-- Final documentation pass: all ADRs finalized, README completed, demo scenarios scripted, resume/skill mapping written, interview-question review across all five phases.
+**Scope (as built — provider pivoted from the original plan; see [ADR-009](./decisions/ADR-009-llm-provider-gemini-direct.md))**
+- Gemini-backed function-calling tool registry (`search_products`, `get_inventory`, `get_low_stock_items`, `get_sales_summary`, `get_purchase_order_status`, `get_supplier_status`, `get_customer_summary`, `search_documents`), tenant- and permission-scoped execution, orchestrated via `Microsoft.Extensions.AI`/`Microsoft.Agents.AI` rather than Semantic Kernel ([ADR-010](./decisions/ADR-010-agent-orchestration-microsoft-extensions-ai.md)).
+- Tool-call arguments are schema-validated automatically (`AIFunctionFactory`); the final answer is free text with a separate citations list — **not** itself a JSON-schema-validated structured output (a scoped-down version of the original plan).
+- RAG pipeline: document upload (.txt/.md) → paragraph-aware chunking → embed → SQL Server native `vector` storage (`CommunityToolkit.VectorData.SqlServer`) → tenant-scoped similarity retrieval (a real pre-filter, not post-filtering) → grounded answer with citations — `search_documents` is a tool in the same registry above, not a separate pipeline.
+- AI guardrails implemented: fixed tool allow-list, per-tool permission re-check against the caller's real claims, tenant-scoped vector retrieval. **Not** implemented: an explicit max-tool-call-loop cap, and prompt-injection-aware framing is in the system prompt but untested against an adversarial document — both named honestly in `docs/checkpoints/skills-inventory.md` rather than left silently unstated.
+- **Not built:** AI interaction logging (request/tool-calls/latency/retrieval sources) for evaluation — standard request logging (Serilog + correlation IDs) covers it generically, nothing AI-specific.
+- Testing: the automated suite never spends real Gemini tokens (`FakeEmbeddingGenerator` covers real chunk/vector storage/retrieval; the tool-calling agent loop is covered by unit tests on the pure permission/delegation logic plus a real-HTTP 403 test, not by faking the LLM) — one manual, deliberate, minimal-token live smoke test against the real Gemini API is the only place real tokens are spent. See [ai-architecture.md](./architecture/ai-architecture.md#testing-philosophy--minimum-tokens).
 
-**Vertical slice built:** a manager asks the AI assistant a real inventory question (answered via tool call against live data) and a real policy question (answered via RAG with a citation), both respecting the asker's actual permissions.
+**Vertical slice built:** a manager asks the AI assistant a real inventory question (answered via tool call against live data) and a real policy question (answered via RAG with a citation), both respecting the asker's actual permissions — proven end-to-end by `tests/Integration/SearchDocumentsTenantIsolationTests.cs`, `AssistantPermissionTests.cs`, and `DocumentsCrudTests.cs`, with the actual "does the agent answer correctly" path reserved for the manual smoke test.
 
 **Checkpoints**
-- *Engineering:* the assistant never answers a data question from model memory when a tool exists for it, and never answers a document question without a retrieved, cited source.
-- *Learning:* the full function-calling loop (model → tool selection → backend validation/execution → result → model → response); chunking/embedding/retrieval trade-offs; why authorization must be re-checked at tool-execution time, not trusted from the prompt.
-- *Interview:* "How do you stop an LLM from doing something a user isn't allowed to do?" "RAG vs fine-tuning — why RAG here?" "How do you evaluate whether retrieval quality is good?"
-- *Evidence:* recorded demo scenarios (from the PRD's scenario list) showing both tool-calling and RAG paths, with an adversarial prompt-injection test case in the AI test suite.
+- *Engineering:* the assistant never answers a data question from model memory when a tool exists for it (every tool independently re-checks the caller's permission before executing — proven by `AiToolsPermissionTests.cs`); a document from one store never surfaces in another store's `search_documents` results (proven by `SearchDocumentsTenantIsolationTests.cs`, the RAG equivalent of Phase 1's `TenantIsolationTests.cs`).
+- *Learning:* the full function-calling loop (model → tool selection → backend validation/execution → result → model → response); chunking/embedding/retrieval trade-offs; why authorization must be re-checked at tool-execution time, not trusted from the prompt; what changes (and what doesn't) when you pivot LLM providers mid-project behind a real abstraction.
+- *Interview:* "How do you stop an LLM from doing something a user isn't allowed to do?" "RAG vs fine-tuning — why RAG here?" "Why Gemini when your ADR originally said OpenAI?" "Why didn't you fake the LLM in your test suite the way you mock everything else?"
+- *Evidence:* `docs/decisions/ADR-009*`/`ADR-010*` (the pivot, documented not hidden), `docs/architecture/ai-architecture.md` (as-built design + named gaps), the four new integration test files, `AiToolsPermissionTests.cs`/`TextChunkerTests.cs` (unit).
 
 ---
 

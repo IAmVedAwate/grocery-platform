@@ -41,7 +41,7 @@ See [testing/testing-strategy.md](../testing/testing-strategy.md) for how these 
 
 ## Secrets Management
 
-- No secret (connection string, JWT signing key, OpenAI API key) is ever committed to source control.
+- No secret (connection string, JWT signing key, Gemini API key) is ever committed to source control.
 - Local development: `.env` (gitignored) / .NET user-secrets.
 - Cloud: Azure Key Vault, accessed via Managed Identity — no secret stored as plain App Service configuration.
 - `.env.example` documents every required variable name with a placeholder, never a real value.

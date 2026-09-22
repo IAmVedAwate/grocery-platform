@@ -5,7 +5,7 @@
 - .NET 10 SDK (see [ADR-008](../decisions/ADR-008-target-framework-net10-vs-net8.md))
 - Node.js (LTS) + npm/pnpm for the Next.js client
 - Docker Desktop (API container + SQL Server container + Testcontainers for integration tests)
-- An OpenAI API key (only required once Phase 5 AI features are being developed/run)
+- A Gemini API key (only required to actually call `/api/v1/assistant/ask` or upload a document — see [ADR-009](../decisions/ADR-009-llm-provider-gemini-direct.md); every other feature, and the whole automated test suite, works with `GEMINI_API_KEY` unset)
 
 ## First-Time Setup
 

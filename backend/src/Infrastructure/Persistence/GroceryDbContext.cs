@@ -39,6 +39,7 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
     public DbSet<Domain.Sales.Payment> Payments => Set<Domain.Sales.Payment>();
     public DbSet<Domain.Sales.Invoice> Invoices => Set<Domain.Sales.Invoice>();
     public DbSet<Domain.Notifications.Notification> Notifications => Set<Domain.Notifications.Notification>();
+    public DbSet<Domain.Ai.Document> Documents => Set<Domain.Ai.Document>();
 
     /// <summary>
     /// Translates EF Core's DbUpdateConcurrencyException into the
@@ -307,6 +308,18 @@ public class GroceryDbContext(DbContextOptions<GroceryDbContext> options, ITenan
             b.HasIndex(n => new { n.StoreId, n.ReferenceId, n.IsRead });
             b.HasIndex(n => new { n.StoreId, n.IsRead, n.CreatedAtUtc });
             b.HasQueryFilter(n => n.StoreId == tenantContext.StoreId);
+        });
+
+        // --- Phase 5: AI / RAG document metadata (chunks/embeddings live
+        // in the SQL Server native-vector collection instead — Infrastructure/Ai) ---
+        builder.Entity<Domain.Ai.Document>(b =>
+        {
+            b.HasKey(d => d.Id);
+            b.Property(d => d.FileName).IsRequired().HasMaxLength(260);
+            b.Property(d => d.ContentType).IsRequired().HasMaxLength(100);
+            b.Property(d => d.StorageKey).IsRequired().HasMaxLength(128);
+            b.HasIndex(d => new { d.StoreId, d.UploadedAtUtc });
+            b.HasQueryFilter(d => d.StoreId == tenantContext.StoreId);
         });
     }
 }

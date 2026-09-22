@@ -238,7 +238,7 @@ Full flow documented in [architecture/authentication-flow.md](./architecture/aut
 - All database access parameterized via EF Core/typed SQL — no string-concatenated queries anywhere, including report/raw-SQL paths.
 - CORS restricted to known client origins per environment.
 - Rate limiting on authentication endpoints (login, refresh, register) to blunt credential-stuffing/brute-force.
-- Secrets (connection strings, JWT signing key, OpenAI key) never in source control; local dev uses user-secrets/`.env`, cloud uses Azure Key Vault (Phase 4).
+- Secrets (connection strings, JWT signing key, Gemini API key) never in source control; local dev uses user-secrets/`.env`, cloud uses Azure Key Vault (Phase 4).
 - File upload restrictions: allow-listed content types, size caps, virus-scan hook point documented even if not implemented in core scope.
 - OWASP Top 10 walkthrough included in the security model doc, mapped to this system's specific mitigations (not generic advice).
 - Cross-tenant data leakage is treated as a security bug class, not a functional bug — covered by dedicated integration tests, not just code review.
@@ -247,15 +247,15 @@ Full flow documented in [architecture/authentication-flow.md](./architecture/aut
 
 Full detail: [architecture/ai-architecture.md](./architecture/ai-architecture.md). Summary requirements:
 
-- OpenAI API (function/tool calling + structured outputs) as the primary LLM integration (see [ADR-005](./decisions/ADR-005-openai-direct-vs-azure-openai.md)).
-- A fixed, backend-owned tool registry: `get_inventory`, `search_products`, `get_sales_summary`, `get_low_stock_items`, `get_purchase_order_status`, `get_supplier_status`, `get_customer_summary`. No tool executes arbitrary SQL or bypasses the same authorization checks a human user of that endpoint would face.
-- Every tool call executes in the authenticated user's tenant/permission context — the LLM selects *which* tool and *what arguments*, the backend independently validates and executes.
-- Structured JSON outputs for both tool-call arguments and final assistant responses that carry data (see §30 for schema).
-- Maximum tool-call loop count per user turn (prevents runaway agent loops).
+- Google Gemini (function/tool calling + embeddings), accessed only through `Microsoft.Extensions.AI`'s provider-neutral `IChatClient`/`IEmbeddingGenerator` interfaces — originally planned as OpenAI direct; see [ADR-009](./decisions/ADR-009-llm-provider-gemini-direct.md) (supersedes [ADR-005](./decisions/ADR-005-openai-direct-vs-azure-openai.md)) for the real, documented pivot, and [ADR-010](./decisions/ADR-010-agent-orchestration-microsoft-extensions-ai.md) for why the agent loop uses `Microsoft.Agents.AI` rather than Semantic Kernel.
+- A fixed, backend-owned tool registry: `search_products`, `get_inventory`, `get_low_stock_items`, `get_sales_summary`, `get_purchase_order_status`, `get_supplier_status`, `get_customer_summary`, `search_documents`. No tool executes arbitrary SQL or bypasses the same authorization checks a human user of that endpoint would face.
+- Every tool call executes in the authenticated user's tenant/permission context — the LLM selects *which* tool and *what arguments*, the backend independently re-checks the caller's real permission claim before executing (not trusted from the prompt), exactly as `AiToolsPermissionTests.cs` proves.
+- Tool-call arguments are structured/schema-validated (`AIFunctionFactory` generates the schema from the C# method signature); the final assistant answer is free text with a separate citations list, not itself a schema-validated structured output — a scoped-down version of the original plan, named honestly in `docs/checkpoints/skills-inventory.md`.
+- A maximum tool-call loop count per user turn was planned but not explicitly configured — `Microsoft.Agents.AI`'s agent loop runs with its defaults; a named gap, not a hidden one.
 
 ## 16. RAG Requirements
 
-- Pipeline: Document upload → text extraction → cleaning → chunking → embedding (OpenAI embeddings API) → storage in SQL Server using the native `VECTOR` column type (Phase 5; see [ADR-003](./decisions/ADR-003-sql-server-native-vector-vs-pgvector-vs-azure-ai-search.md)) → metadata (tenant, document, chunk index) → similarity retrieval → prompt assembly with retrieved context → grounded answer with citations.
+- Pipeline (as built): Document upload (.txt/.md) → paragraph-aware chunking (pure, unit-tested — `TextChunker.cs`) → embedding (Gemini embeddings API) → storage in SQL Server using the native `vector` column type via `CommunityToolkit.VectorData.SqlServer` (Phase 5; see [ADR-003](./decisions/ADR-003-sql-server-native-vector-vs-pgvector-vs-azure-ai-search.md)) → metadata (tenant, document, chunk index) → similarity retrieval, exposed as the `search_documents` tool in the same registry as §15 rather than a separate pipeline → grounded answer with citations.
 - Retrieval is tenant-scoped: a similarity query always filters by `StoreId` before/alongside the vector search — a document from Store A can never surface in Store B's answer, regardless of vector similarity.
 - If no chunk clears the similarity threshold, the assistant says it doesn't know rather than answering ungrounded.
 - Every RAG answer includes chunk/document references sufficient for the user to verify the source.
@@ -325,7 +325,7 @@ Centralized exception-handling middleware maps domain/validation exceptions to t
 
 ## 30. Architecture Decisions
 
-Index of all ADRs: [decisions/ADR-000-index.md](./decisions/ADR-000-index.md). Locked for Phase 1: modular monolith, shared-schema multi-tenancy, SQL Server native vector, JWT+refresh auth, OpenAI direct, in-process background workers, `IMemoryCache` caching. Deferred to their relevant phase: Azure compute target, Semantic Kernel adoption.
+Index of all ADRs: [decisions/ADR-000-index.md](./decisions/ADR-000-index.md). Locked for Phase 1: modular monolith, shared-schema multi-tenancy, SQL Server native vector, JWT+refresh auth, in-process background workers, `IMemoryCache` caching. Decided in Phase 5 (pivoted from the original Phase 1 plan): Gemini direct over OpenAI direct ([ADR-009](./decisions/ADR-009-llm-provider-gemini-direct.md), supersedes [ADR-005](./decisions/ADR-005-openai-direct-vs-azure-openai.md)), `Microsoft.Extensions.AI`/`Microsoft.Agents.AI` over Semantic Kernel ([ADR-010](./decisions/ADR-010-agent-orchestration-microsoft-extensions-ai.md)). Deferred to its relevant phase: Azure compute target.
 
 ## 31. Risks
 
@@ -333,7 +333,7 @@ Index of all ADRs: [decisions/ADR-000-index.md](./decisions/ADR-000-index.md). L
 |---|---|---|
 | Scope too large for 4 hrs/day solo | Missed timeline, burnout | Desktop/K8s/multi-agent/cross-tenant-analytics deferred to Phase 6+; vertical slicing keeps the app demoable every phase |
 | Cross-tenant data leak | Portfolio-credibility-destroying bug | Dedicated integration tests attempting cross-tenant access; global query filters as defense-in-depth |
-| AI/RAG overengineering | Wasted time on infra with no business value | SQL Server native vector (no new DB), OpenAI direct (no Azure quota delay) |
+| AI/RAG overengineering | Wasted time on infra with no business value | SQL Server native vector (no new DB), Gemini direct (no Azure quota delay), `Microsoft.Extensions.AI` over Semantic Kernel (no unused orchestration machinery) |
 | Azure cost creep | Unplanned expense | Per-service cost note + free/local alternative documented before adoption |
 | "Data network" ambition distracts from MVP | Building unused features | Explicitly marked non-goal for Phases 1–5 (§3) |
 | Generated code not actually understood | Can't defend it in interview | Every significant decision explained with alternatives/trade-offs/interview questions in this PRD and its ADRs |
@@ -343,7 +343,7 @@ Index of all ADRs: [decisions/ADR-000-index.md](./decisions/ADR-000-index.md). L
 - **Modular monolith over microservices**: simpler to build/operate/reason about solo; sacrifices independent service scaling and deployment — acceptable because the traffic/team-size profile of a portfolio project (and most small SaaS at this stage) doesn't need it. See [ADR-001](./decisions/ADR-001-modular-monolith-vs-microservices.md).
 - **Shared schema multi-tenancy over database-per-tenant**: much cheaper to operate and migrate; requires strict discipline (query filters + tests) to avoid cross-tenant leakage, which is the accepted trade-off given the tenant count expected in a portfolio/early-SaaS context. See [ADR-002](./decisions/ADR-002-multi-tenancy-strategy.md).
 - **SQL Server native vector over a dedicated vector DB**: keeps infrastructure minimal and reuses an already-strong skill; sacrifices some of the retrieval sophistication a purpose-built vector database (e.g., Azure AI Search's hybrid search tooling) offers out of the box. See [ADR-003](./decisions/ADR-003-sql-server-native-vector-vs-pgvector-vs-azure-ai-search.md).
-- **OpenAI direct over Azure OpenAI initially**: faster to start, no quota/approval friction; sacrifices some Azure-native integration story until the documented later migration. See [ADR-005](./decisions/ADR-005-openai-direct-vs-azure-openai.md).
+- **Gemini direct over OpenAI direct (revised from the original Phase 1 plan) or Azure OpenAI**: reuses an already-provisioned, already-proven API key and reference implementation instead of blocking Phase 5 on OpenAI billing setup; sacrifices exact parity with the provider most commonly referenced in .NET job postings. The pivot itself, made behind a real provider-neutral abstraction, is arguably a stronger interview story than the original plan would have been. See [ADR-009](./decisions/ADR-009-llm-provider-gemini-direct.md) (supersedes [ADR-005](./decisions/ADR-005-openai-direct-vs-azure-openai.md)).
 
 ## 33. MVP Definition (P0)
 

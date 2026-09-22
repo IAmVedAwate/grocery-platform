@@ -30,7 +30,7 @@ QuickStock is a multi-tenant grocery/retail management platform: one deployable 
           ┌────────────────────┼────────────────────┬─────────────────┐
           ▼                    ▼                     ▼                 ▼
    ┌─────────────┐     ┌──────────────┐      ┌───────────────┐  ┌─────────────┐
-   │ SQL Server   │     │ Blob Storage  │      │ OpenAI API     │  │ Key Vault    │
+   │ SQL Server   │     │ Blob Storage  │      │ Gemini API     │  │ Key Vault    │
    │ (tenant data,│     │ (documents)   │      │ (chat, tools,  │  │ (secrets,    │
    │  vectors)    │     │               │      │  embeddings)   │  │  cloud only) │
    └─────────────┘     └──────────────┘      └───────────────┘  └─────────────┘

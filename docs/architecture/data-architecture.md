@@ -69,12 +69,13 @@ No `Update`/`Delete` DbSet operations are exposed for this entity above `Infrast
 ### Notification
 `Id (PK)`, `StoreId (FK)`, `Type`, `Payload`, `IsRead`, `CreatedAtUtc`.
 
-### Document / DocumentChunk
-`Document(Id, StoreId, FileName, ContentType, SizeBytes, BlobPath, UploadedByUserId, CreatedAtUtc)`.
-`DocumentChunk(Id, DocumentId, StoreId, ChunkIndex, Content, Embedding [VECTOR type, Phase 5], CreatedAtUtc)` — `StoreId` is denormalized onto the chunk table specifically so the tenant filter can apply directly to the vector-search query without an extra join (see [ai-architecture.md](./ai-architecture.md)).
+### Document / DocumentChunk (Phase 5, as built — see [ai-architecture.md](./ai-architecture.md))
+`Document(Id, StoreId, FileName [nvarchar 260], ContentType [nvarchar 100], StorageKey [nvarchar 128], UploadedByUserId, UploadedAtUtc)` — a normal EF Core entity/table, global-query-filtered by `StoreId` like every other tenant-owned table. The raw file bytes live in `IStorageService` (same local/Azure-Blob abstraction as product images); `StorageKey` is the pointer.
 
-### AiInteractionLog (platform-level, Global — tenant-tagged, queried only by platform admins)
-`Id (PK)`, `StoreId (FK)`, `UserId (FK)`, `Prompt` (redacted/truncated per §32 of the original brief — no sensitive content stored unnecessarily), `ToolCalls (JSON)`, `LatencyMs`, `Outcome`, `CreatedAtUtc`.
+`DocumentChunk(Id [string, "{documentId}:{chunkIndex}"], StoreId, DocumentId, FileName, ChunkIndex, Content, Vector)` is **not** an EF Core entity — it's a record type mapped via `CommunityToolkit.VectorData` attributes (`[VectorStoreKey]`, `[VectorStoreData(IsIndexed = true)]` on `StoreId`, `[VectorStoreVector(1536)]` on `Vector`) into a `VectorStore` collection (`document_chunks`) that CommunityToolkit.VectorData.SqlServer backs with a SQL Server 2025 native `vector` column — in the *same* database, over the *same* connection string, as every relational table (ADR-003), just addressed through a different persistence API than `GroceryDbContext`. `Vector` holds the chunk's own text; the collection's configured `EmbeddingGenerator` embeds it automatically on upsert. `StoreId` is `IsIndexed` specifically so `VectorSearchOptions.Filter` can apply the tenant boundary as a real pre-filter on the similarity search itself, not a post-filter — see [ai-architecture.md](./ai-architecture.md) and `tests/Integration/SearchDocumentsTenantIsolationTests.cs`.
+
+### AiInteractionLog — not built
+Originally planned as a platform-level interaction log (prompt, tool calls, latency, outcome). Not implemented in Phase 5 — standard structured request logging (Serilog + correlation IDs) covers every AI endpoint the same as any other, but there's no dedicated interaction-level record. Documented here as a known gap (see [ai-architecture.md](./ai-architecture.md#known-gaps-honestly-scoped-out-of-phase-5)) rather than left silently implied by this doc.
 
 ### SubscriptionPlan (Global — schema stub only, no logic in core scope)
 `Id (PK)`, `StoreId (FK)`, `PlanName`, `Status`. Exists so the schema doesn't need a breaking migration if billing is added post-MVP; not read or written by any Phase 1–5 feature.

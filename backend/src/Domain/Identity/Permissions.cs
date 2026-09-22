@@ -23,6 +23,7 @@ public static class Permissions
     public const string ReportsView = "reports.view";
     public const string UsersManage = "users.manage";
     public const string NotificationsView = "notifications.view";
+    public const string AiAssistantUse = "ai.assistant.use";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -31,7 +32,7 @@ public static class Permissions
         PurchaseCreate, PurchaseApprove,
         SalesCreate, SalesRefund,
         ReportsView, UsersManage,
-        NotificationsView
+        NotificationsView, AiAssistantUse
     ];
 }
 
@@ -59,7 +60,8 @@ public static class DefaultRoles
                 Permissions.InventoryRead, Permissions.InventoryAdjust,
                 Permissions.PurchaseCreate, Permissions.PurchaseApprove,
                 Permissions.SalesCreate, Permissions.SalesRefund,
-                Permissions.ReportsView, Permissions.NotificationsView
+                Permissions.ReportsView, Permissions.NotificationsView,
+                Permissions.AiAssistantUse
             ],
             [InventoryManager] =
             [
@@ -83,7 +85,8 @@ public static class DefaultRoles
             [
                 Permissions.CatalogRead,
                 Permissions.InventoryRead,
-                Permissions.ReportsView
+                Permissions.ReportsView,
+                Permissions.AiAssistantUse
             ]
         };
 }
