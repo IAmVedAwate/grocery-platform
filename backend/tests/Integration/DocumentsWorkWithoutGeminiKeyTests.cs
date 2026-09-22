@@ -1,7 +1,10 @@
 using System.Net;
 using Infrastructure.Ai;
 using Integration.Helpers;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -33,15 +36,33 @@ namespace Integration;
 [Collection("Integration")]
 public class DocumentsWorkWithoutGeminiKeyTests(CustomWebApplicationFactory factory)
 {
-    [Fact]
-    public async Task ListAndDelete_WorkWithNoGeminiApiKeyConfigured()
-    {
-        using var realLazyFactory = factory.WithWebHostBuilder(builder =>
+    /// <summary>
+    /// Reverts the embedding-generator fake back to the real lazy wrapper
+    /// AND explicitly blanks GEMINI_API_KEY. The blanking is load-bearing,
+    /// not belt-and-braces: WebApplicationFactory boots the real Program,
+    /// which loads the Api project's user-secrets — so the moment a
+    /// developer sets a real key locally (as they must, to run the manual
+    /// smoke test), this test would otherwise find it, fail, and — far
+    /// worse — spend real tokens on every single test run. Blanking it here
+    /// makes the test hermetic: it asserts the same thing whether or not a
+    /// key exists on the machine, and can never make a billable call.
+    /// </summary>
+    private WebApplicationFactory<Program> CreateFactoryWithRealGeneratorAndNoKey() =>
+        factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?> { ["GEMINI_API_KEY"] = "" }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IEmbeddingGenerator<string, Embedding<float>>>();
                 services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp => new LazyGeminiEmbeddingGenerator(sp));
-            }));
+            });
+        });
+
+    [Fact]
+    public async Task ListAndDelete_WorkWithNoGeminiApiKeyConfigured()
+    {
+        using var realLazyFactory = CreateFactoryWithRealGeneratorAndNoKey();
         var client = realLazyFactory.CreateClient();
         var store = await AuthTestHelper.RegisterAndLoginAsync(client, "doc-no-key");
 
@@ -56,12 +77,7 @@ public class DocumentsWorkWithoutGeminiKeyTests(CustomWebApplicationFactory fact
     [Fact]
     public async Task Upload_WithNoGeminiApiKeyConfigured_FailsWithAClearError_NotAGeneric500()
     {
-        using var realLazyFactory = factory.WithWebHostBuilder(builder =>
-            builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<IEmbeddingGenerator<string, Embedding<float>>>();
-                services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp => new LazyGeminiEmbeddingGenerator(sp));
-            }));
+        using var realLazyFactory = CreateFactoryWithRealGeneratorAndNoKey();
         var client = realLazyFactory.CreateClient();
         var store = await AuthTestHelper.RegisterAndLoginAsync(client, "doc-no-key-upload");
 

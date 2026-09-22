@@ -177,8 +177,13 @@ builder.Services.AddHostedService<Api.BackgroundServices.LowStockNotificationWor
 builder.Services.AddSingleton<Client>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
-    var apiKey = configuration["GEMINI_API_KEY"]
-        ?? throw new InvalidOperationException("GEMINI_API_KEY is not configured.");
+    // Blank counts as "not configured" too, not just absent — a test host
+    // (or a half-filled .env) that sets the key to an empty string must
+    // fail here with a clear message rather than handing "" to the SDK and
+    // attempting a doomed, billable call.
+    var apiKey = configuration["GEMINI_API_KEY"];
+    if (string.IsNullOrWhiteSpace(apiKey))
+        throw new InvalidOperationException("GEMINI_API_KEY is not configured.");
     return new Client(apiKey: apiKey);
 });
 builder.Services.AddSingleton(sp =>

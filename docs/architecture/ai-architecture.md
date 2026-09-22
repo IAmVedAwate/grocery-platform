@@ -95,6 +95,7 @@ Every other test suite in this project hits real infrastructure (real SQL Server
   - `AssistantController`'s permission gate is covered by a real HTTP integration test (`AssistantPermissionTests.cs`) that proves a 403 never even constructs `IChatClient` (authorization runs before the controller is activated).
   - The "does the agent actually answer correctly" path is **one deliberate, manual, minimal-token live smoke test**, run once a real `GEMINI_API_KEY` is available locally — never part of the automated suite.
 - Every AI-related DI registration in `Program.cs` is a lazy factory delegate, resolved only on first real use — the whole application boots and every non-AI feature works with no `GEMINI_API_KEY` configured at all.
+- **`CustomWebApplicationFactory` blanks `GEMINI_API_KEY` for the entire suite.** This is the guarantee that makes "we don't fake the chat client" safe: `WebApplicationFactory` boots the real `Program` and therefore inherits the developer's own user-secrets, so once a real key exists locally (as it must, to run the smoke test), *any* test reaching an AI path would otherwise bill a live call on every run. Blanking it means such a test fails loudly with "GEMINI_API_KEY is not configured" instead of quietly charging. This was a real incident, not a hypothetical — see `docs/operations/troubleshooting.md`.
 
 ## Known Gaps (honestly scoped out of Phase 5)
 

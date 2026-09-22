@@ -47,19 +47,29 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 // WithWebHostBuilder to actually prove 429 triggers.
                 ["RATE_LIMIT_AUTH_PERMIT_LIMIT"] = "100000",
                 ["RATE_LIMIT_AUTH_WINDOW_SECONDS"] = "60",
-                ["STORAGE_LOCAL_PATH"] = _storageRoot
+                ["STORAGE_LOCAL_PATH"] = _storageRoot,
+                // Hard stop on ever spending real Gemini tokens from a test
+                // run. This is NOT redundant with the fake below: this
+                // factory boots the real Program, which loads the Api
+                // project's USER-SECRETS — and a developer who has run the
+                // manual smoke test has a real key sitting there. Without
+                // this line, any future test that reaches the assistant
+                // endpoint with a valid permission would quietly bill a
+                // live call on every run, including CI-on-a-dev-machine.
+                // Blanked rather than removed so the failure, if one ever
+                // does reach Gemini, is a loud "not configured" (see
+                // Program.cs) instead of a silent charge.
+                ["GEMINI_API_KEY"] = ""
             });
         });
 
-        // No GEMINI_API_KEY is configured for tests (see .env.example) —
-        // this swap is what makes that possible for the document/RAG
-        // pipeline specifically. The chunking → embed → SQL Server vector
-        // upsert → tenant-scoped search path is exercised for real; only
-        // the embedding call itself is faked (FakeEmbeddingGenerator),
-        // never the real Gemini API. The chat/tool-calling agent loop
-        // (IChatClient) is deliberately NOT faked here — see AiTools.cs
-        // and docs/testing/testing-strategy.md for why that's reserved
-        // for one manual, deliberate live smoke test instead.
+        // The chunking → embed → SQL Server vector upsert → tenant-scoped
+        // search path is exercised for REAL; only the embedding call itself
+        // is faked. The chat/tool-calling agent loop (IChatClient) is
+        // deliberately NOT faked — see AiTools.cs and
+        // docs/testing/testing-strategy.md for why that's reserved for one
+        // manual, deliberate live smoke test instead. The blanked key above
+        // is what guarantees "not faked" can't turn into "silently billed".
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IEmbeddingGenerator<string, Embedding<float>>>();

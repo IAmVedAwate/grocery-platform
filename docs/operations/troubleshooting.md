@@ -15,6 +15,14 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### Setting a real Gemini key in user-secrets made the test suite start billing live API calls
+
+**Encountered:** 2026-09-23, Phase 5 — immediately after the first real `GEMINI_API_KEY` was configured locally
+**Symptom:** `DocumentsWorkWithoutGeminiKeyTests.Upload_WithNoGeminiApiKeyConfigured_FailsWithAClearError_NotAGeneric500` started failing (expected `500`, got `201`) on a suite that had been green minutes earlier. Nothing in the test or the code under test had changed — the only change was `dotnet user-secrets set GEMINI_API_KEY ...` so the manual smoke test could run.
+**Root cause:** `WebApplicationFactory<Program>` boots the *real* `Program`, which means it builds the *real* configuration chain — including the Api project's **user-secrets**. The test's whole premise ("no key is configured") was never actually enforced; it was just quietly relying on no developer having set one yet. Once a real key existed, the test found it, the upload succeeded instead of failing — and, far worse than the failing assertion, the test made a **real, billable Gemini embedding call on every run**, in a suite explicitly designed never to spend tokens (see `docs/architecture/ai-architecture.md`, "Testing Philosophy"). The `FakeEmbeddingGenerator` didn't protect here precisely because this one test deliberately reverts to the real generator.
+**Fix:** Two layers. (1) `CustomWebApplicationFactory` now sets `["GEMINI_API_KEY"] = ""` in its in-memory config for the entire suite — a hard stop that applies to *every* test, including any future one that reaches the assistant endpoint, so "the chat loop isn't faked" can never silently become "the chat loop is billed." (2) `DocumentsWorkWithoutGeminiKeyTests` blanks the key explicitly in its own `WithWebHostBuilder` config rather than assuming the ambient environment lacks one, making it hermetic and assert the same thing on any machine. `Program.cs` was also hardened to treat a blank key as "not configured" (`string.IsNullOrWhiteSpace`) instead of passing `""` to the SDK and attempting a doomed call.
+**Prevention:** When a test suite must *not* touch a paid external service, don't rely on the credential being absent — **explicitly blank it in the test host's configuration**, so the guarantee is enforced rather than incidental. This is especially sharp for `WebApplicationFactory`, which inherits user-secrets and environment variables from the developer's machine by design. General rule: "the test passes on my machine because I haven't configured X yet" is a latent failure *and* a latent bill, and the fix is to make the absence explicit.
+
 ### Vector store resolves the embedding generator eagerly, breaking document List/Delete with no Gemini key
 
 **Encountered:** 2026-09-22/23, Phase 5 (AI assistant + RAG) — found by hand, not by the test suite
