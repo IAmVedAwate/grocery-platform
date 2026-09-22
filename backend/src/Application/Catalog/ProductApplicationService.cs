@@ -14,7 +14,8 @@ public sealed class ProductApplicationService(
     ITenantContext tenantContext,
     IUnitOfWork unitOfWork,
     IStorageService storage,
-    IColorExtractionService colorExtraction)
+    IColorExtractionService colorExtraction,
+    IAuditWriter auditWriter)
 {
     private static readonly IReadOnlyDictionary<string, string> AllowedImageTypes = new Dictionary<string, string>
     {
@@ -71,9 +72,25 @@ public sealed class ProductApplicationService(
             && await products.BarcodeExistsAsync(request.Barcode, ct))
             throw new ConflictAppException($"Barcode '{request.Barcode}' is already in use.");
 
+        // Captured before mutating — price/tax are the fields with real
+        // financial consequence (docs/PRD.md §28 names "product price
+        // change" explicitly), so only log when one of them actually
+        // moves, not on every touch of an unrelated field like name/barcode.
+        var previousPrice = product.Price;
+        var previousTaxRatePercent = product.TaxRatePercent;
+
         product.UpdateDetails(
             request.Name, request.Price, request.TaxRatePercent, request.Barcode,
             request.CategoryId, request.BrandId, request.UnitId, request.LowStockThreshold);
+
+        if (previousPrice != product.Price || previousTaxRatePercent != product.TaxRatePercent)
+            auditWriter.Record("catalog.price_changed", nameof(Product), product.Id.ToString(), new
+            {
+                previousPrice,
+                newPrice = product.Price,
+                previousTaxRatePercent,
+                newTaxRatePercent = product.TaxRatePercent
+            });
 
         await unitOfWork.SaveChangesAsync(ct);
         return product;

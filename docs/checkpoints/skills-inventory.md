@@ -99,11 +99,11 @@ Architecture isn't one label — this project stacks three separate decisions, e
 ### Testing
 | Item | Status | Note |
 |---|---|---|
-| unit testing | ✅ | xUnit, 38 tests |
-| integration testing | ✅ | Testcontainers + `WebApplicationFactory`, 51 tests — real SQL Server, real ONNX model, real file I/O, never mocked |
+| unit testing | ✅ | xUnit, 43 tests |
+| integration testing | ✅ | Testcontainers + `WebApplicationFactory`, 53 tests — real SQL Server, real ONNX model, real file I/O, never mocked |
 | test database | ✅ | Real SQL Server 2025 via Testcontainers |
 | testable architecture | ✅ | DI + interfaces + enforced architecture tests |
-| **mocking** | ❌ | No Moq/NSubstitute/FakeItEasy anywhere. Real gap: the project's "real infra, not mocks" philosophy is defensible, but it means there's no code demonstrating mocking a dependency specifically |
+| mocking | ✅ | Moq, deliberately scoped: `ProductApplicationServiceTests.cs` isolates `SetImageAsync`'s business-rule branches (reject before touching storage, degrade gracefully when the color model fails, delete the old file only *after* the new one is committed — an interaction-order guarantee proven via `Mock.Verify`/callback ordering) — exactly the case where a mock earns its place over real infra, not a wholesale replacement of the project's real-infra philosophy elsewhere |
 
 ### Docker / DevOps
 | Item | Status | Note |
@@ -145,13 +145,13 @@ LLM basics, OpenAI API, structured output, function calling, embeddings, RAG, ve
 
 Not hidden, not excused — a plain list to close or consciously accept before interviews start.
 
-1. **No audit trail for a product price change.** Login, permission changes, inventory adjustments, purchase approvals, and sales are all audited; `ProductApplicationService.UpdateAsync` (price/tax changes) is not. A real, easy-to-close gap, not a documented trade-off.
-2. **No mocking example anywhere.** Defensible philosophy (real DB/model over mocks), but worth having *one* deliberate example if a mocking question comes up.
-3. **No explicit transaction/isolation/locking demonstration.** Everything relies on EF Core's implicit per-`SaveChangesAsync` transaction; no `BeginTransaction`, isolation level, or pessimistic lock hint exists to point at.
-4. **No CI/CD pipeline.** `.github/workflows/` is a placeholder.
-5. **No cloud deployment.** Phase 4, openly deferred.
-6. **No AI/RAG code.** Phase 5, openly deferred — architecture decisions already made, nothing built.
-7. **No resilience library (Polly).** Failure handling exists at the business-logic level (idempotency, concurrency safety) but not at the infrastructure/network level.
+1. **No explicit transaction/isolation/locking demonstration.** Everything relies on EF Core's implicit per-`SaveChangesAsync` transaction — which *is* a real database transaction, just not an explicit one — so there's no `BeginTransaction`, isolation level, or pessimistic lock hint to point at. Deliberately not manufacturing a fake example for this: nothing in the current design has a genuine two-round-trip consistency need. It would have a natural home in a stock-transfer-between-locations feature (the schema already anticipates a `Transfer` movement type) if that ever gets built.
+2. **No CI/CD pipeline.** `.github/workflows/` is a placeholder.
+3. **No cloud deployment.** Phase 4, openly deferred.
+4. **No AI/RAG code.** Phase 5, openly deferred — architecture decisions already made, nothing built.
+5. **No resilience library (Polly).** Failure handling exists at the business-logic level (idempotency, concurrency safety) but not at the infrastructure/network level.
+
+**Closed since the first version of this doc:** product price-change audit logging (`catalog.price_changed`, `ProductApplicationService.UpdateAsync`) and a deliberate mocking example (`ProductApplicationServiceTests.cs`, Moq) — both were named gaps here and are now real, tested code.
 
 ---
 
