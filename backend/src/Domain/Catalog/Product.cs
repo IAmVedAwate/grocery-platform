@@ -22,6 +22,7 @@ public class Product
     public bool IsActive { get; private set; }
     public int LowStockThreshold { get; private set; }
     public string? ImageStorageKey { get; private set; }
+    public string? DominantColorHex { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
@@ -94,19 +95,23 @@ public class Product
 
     /// <summary>The old image (if any) is the caller's responsibility to
     /// delete from storage — Domain has no storage dependency, so it only
-    /// ever knows the current key, never what came before it.</summary>
-    public void SetImage(string storageKey)
+    /// ever knows the current key, never what came before it. dominantColorHex
+    /// is optional (null if the model couldn't read the image) — a product
+    /// image is still valid with no detected color.</summary>
+    public void SetImage(string storageKey, string? dominantColorHex)
     {
         if (string.IsNullOrWhiteSpace(storageKey))
             throw new ArgumentException("Storage key is required.", nameof(storageKey));
 
         ImageStorageKey = storageKey;
+        DominantColorHex = dominantColorHex;
         UpdatedAtUtc = DateTime.UtcNow;
     }
 
     public void ClearImage()
     {
         ImageStorageKey = null;
+        DominantColorHex = null;
         UpdatedAtUtc = DateTime.UtcNow;
     }
 

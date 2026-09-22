@@ -169,7 +169,14 @@ export default function ProductsPage() {
             </thead>
             <tbody>
               {result.items.map((p) => (
-                <tr key={p.id} className="border-b border-gray-100 last:border-0">
+                <tr
+                  key={p.id}
+                  className="border-b border-gray-100 last:border-0"
+                  // 50% opacity so text stays readable over any color
+                  // (docs/PRD.md — "find a product by color" browsing:
+                  // people often recall a product's color before its name).
+                  style={p.dominantColorHex ? { backgroundColor: `${p.dominantColorHex}80` } : undefined}
+                >
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <ProductImage productId={p.id} hasImage={p.hasImage} />

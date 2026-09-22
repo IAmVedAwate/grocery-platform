@@ -19,6 +19,7 @@ export type ProductDto = {
   isActive: boolean;
   lowStockThreshold: number;
   hasImage: boolean;
+  dominantColorHex: string | null;
 };
 
 export type InventoryOverviewRow = {

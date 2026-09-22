@@ -105,6 +105,10 @@ builder.Services.AddScoped<IAuditWriter, Infrastructure.Audit.AuditWriter>();
 // implementation selected here), not implemented yet, so there's nothing
 // to branch on at registration time.
 builder.Services.AddScoped<Application.Common.IStorageService, Infrastructure.Storage.LocalFileStorageService>();
+
+// Singleton: InferenceSession loads/JITs the ONNX model graph once at
+// startup, not per request (matches the source practice project).
+builder.Services.AddSingleton<Application.Common.IColorExtractionService, Infrastructure.ColorExtraction.OnnxColorExtractionService>();
 builder.Services.AddScoped<AuthApplicationService>();
 builder.Services.AddScoped<Application.Identity.UserManagementApplicationService>();
 builder.Services.AddScoped<ProductApplicationService>();

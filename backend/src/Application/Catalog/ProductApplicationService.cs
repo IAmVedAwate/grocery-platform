@@ -13,7 +13,8 @@ public sealed class ProductApplicationService(
     IProductRepository products,
     ITenantContext tenantContext,
     IUnitOfWork unitOfWork,
-    IStorageService storage)
+    IStorageService storage,
+    IColorExtractionService colorExtraction)
 {
     private static readonly IReadOnlyDictionary<string, string> AllowedImageTypes = new Dictionary<string, string>
     {
@@ -101,8 +102,20 @@ public sealed class ProductApplicationService(
         var product = await products.GetByIdAsync(id, ct) ?? throw new NotFoundException(nameof(Product), id);
         var previousKey = product.ImageStorageKey;
 
-        var newKey = await storage.SaveAsync(content, extension, ct);
-        product.SetImage(newKey);
+        // Buffered once because both storage and color extraction need to
+        // read the stream from the start, and a stream can only be
+        // consumed once — SaveAsync copies it to disk, extraction decodes
+        // it as an image, neither can go first against the original.
+        using var buffer = new MemoryStream();
+        await content.CopyToAsync(buffer, ct);
+
+        buffer.Position = 0;
+        var newKey = await storage.SaveAsync(buffer, extension, ct);
+
+        buffer.Position = 0;
+        var dominantColor = await colorExtraction.ExtractDominantColorAsync(buffer, ct);
+
+        product.SetImage(newKey, dominantColor?.Hex);
         await unitOfWork.SaveChangesAsync(ct);
 
         // Best-effort cleanup, after the new key is safely committed —

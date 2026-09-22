@@ -97,8 +97,8 @@ public sealed class ProductsController(ProductApplicationService products) : Con
 public sealed record CreateProductDto(string Sku, string Name, decimal Price, decimal TaxRatePercent, string? Barcode, Guid? CategoryId, Guid? BrandId, Guid? UnitId, int LowStockThreshold);
 public sealed record UpdateProductDto(string Name, decimal Price, decimal TaxRatePercent, string? Barcode, Guid? CategoryId, Guid? BrandId, Guid? UnitId, int LowStockThreshold);
 
-public sealed record ProductDto(Guid Id, string Sku, string? Barcode, string Name, decimal Price, decimal TaxRatePercent, bool IsActive, int LowStockThreshold, bool HasImage)
+public sealed record ProductDto(Guid Id, string Sku, string? Barcode, string Name, decimal Price, decimal TaxRatePercent, bool IsActive, int LowStockThreshold, bool HasImage, string? DominantColorHex)
 {
     public static ProductDto From(Domain.Catalog.Product p) =>
-        new(p.Id, p.Sku, p.Barcode, p.Name, p.Price, p.TaxRatePercent, p.IsActive, p.LowStockThreshold, p.ImageStorageKey is not null);
+        new(p.Id, p.Sku, p.Barcode, p.Name, p.Price, p.TaxRatePercent, p.IsActive, p.LowStockThreshold, p.ImageStorageKey is not null, p.DominantColorHex);
 }

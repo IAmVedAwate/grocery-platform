@@ -10,12 +10,26 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.30.0" />
+    <!-- Pinned to the last Apache-2.0 release line — 3.1+/4.x moved to the
+         Six Labors Split License, which requires a paid commercial license
+         outside narrow free-tier cases. Not something to carry silently in
+         a portfolio project meant to be run/deployed freely. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Needed for IHttpContextAccessor (HttpTenantContext) — Infrastructure
          is allowed to depend on ASP.NET Core; only Domain is not. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ships with the assembly (docs/architecture — product color
+         extraction), not user data, so it's Content/CopyToOutputDirectory
+         like any other bundled asset, not something read from
+         STORAGE_LOCAL_PATH. -->
+    <Content Include="ColorExtraction\Models\dominant_color.onnx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>
