@@ -6,6 +6,19 @@ import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { Field } from "@/components/field";
 import { NavBar } from "@/components/nav-bar";
+import { Drawer } from "@/components/ui/drawer";
+import { PlusIcon, UsersIcon } from "@/components/ui/icons";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  PageShell,
+  Skeleton,
+  cn,
+} from "@/components/ui/primitives";
 import type { StaffUserDto } from "@/lib/types";
 
 export default function StaffSettingsPage() {
@@ -22,6 +35,7 @@ export default function StaffSettingsPage() {
   const [newPermissions, setNewPermissions] = useState<Set<string>>(new Set());
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   const load = useCallback(async () => {
     setListError(null);
@@ -70,6 +84,7 @@ export default function StaffSettingsPage() {
       setPassword("");
       setDisplayName("");
       setNewPermissions(new Set());
+      setFormOpen(false);
       await load();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Could not create staff account.");
@@ -81,40 +96,43 @@ export default function StaffSettingsPage() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-4xl flex-1 p-6">
-        <h1 className="mb-1 text-xl font-semibold">Staff</h1>
-        <p className="mb-6 text-sm text-gray-500">
-          Access here is a plain permission checklist per person — not a fixed role. Check exactly what each
-          person should be able to do; nothing else is assumed.
-        </p>
+      <PageShell>
+        <PageHeader
+          title="Staff"
+          description="Access is a plain permission checklist per person - not a fixed role. Check exactly what someone should be able to do; nothing else is assumed."
+          action={
+            <Button onClick={() => setFormOpen(true)}>
+              <PlusIcon className="size-4" />
+              Add staff
+            </Button>
+          }
+        />
 
-        <form onSubmit={handleCreate} className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-medium text-gray-700">Add a staff account</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label="Name" value={displayName} onChange={setDisplayName} />
-            <Field label="Email" type="email" value={email} onChange={setEmail} />
-            <Field label="Password" type="password" value={password} onChange={setPassword} placeholder="At least 8 characters" />
-          </div>
-
-          <p className="mt-4 mb-2 text-sm font-medium text-gray-700">Permissions</p>
-          <PermissionGrid all={allPermissions} checked={newPermissions} onToggle={toggleNewPermission} />
-
-          {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="mt-3 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-          >
-            {isSaving ? "Creating…" : "Add staff account"}
-          </button>
-        </form>
-
-        {listError && <p className="mb-3 text-sm text-red-600">{listError}</p>}
+        {listError && <div className="mb-4"><Alert>{listError}</Alert></div>}
 
         {!staff ? (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <div className="space-y-3">
+            {[0, 1].map((i) => (
+              <Card key={i} className="p-5">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="mt-3 h-3 w-full" />
+              </Card>
+            ))}
+          </div>
         ) : staff.length === 0 ? (
-          <p className="text-sm text-gray-500">No staff accounts yet.</p>
+          <Card>
+            <EmptyState
+              icon={<UsersIcon />}
+              title="No staff accounts yet"
+              description="Add an account and tick only the permissions that person needs."
+              action={
+                <Button onClick={() => setFormOpen(true)}>
+                  <PlusIcon className="size-4" />
+                  Add staff
+                </Button>
+              }
+            />
+          </Card>
         ) : (
           <div className="space-y-3">
             {staff.map((s) => (
@@ -122,7 +140,44 @@ export default function StaffSettingsPage() {
             ))}
           </div>
         )}
-      </main>
+      </PageShell>
+
+      <Drawer
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title="Add staff account"
+        description="They can sign in immediately with these permissions."
+        width="lg"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setFormOpen(false)}>
+              Cancel
+            </Button>
+            <Button form="new-staff" type="submit" disabled={isSaving}>
+              {isSaving ? "Creating..." : "Add account"}
+            </Button>
+          </div>
+        }
+      >
+        <form id="new-staff" onSubmit={handleCreate} className="space-y-4 p-5">
+          <Field label="Name" value={displayName} onChange={setDisplayName} />
+          <Field label="Email" type="email" value={email} onChange={setEmail} />
+          <Field
+            label="Password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            placeholder="At least 8 characters"
+          />
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-muted">Permissions</p>
+            <PermissionGrid all={allPermissions} checked={newPermissions} onToggle={toggleNewPermission} />
+          </div>
+
+          {formError && <Alert>{formError}</Alert>}
+        </form>
+      </Drawer>
     </>
   );
 }
@@ -136,15 +191,28 @@ function PermissionGrid({
   checked: Set<string>;
   onToggle: (key: string) => void;
 }) {
-  if (!all) return <p className="text-sm text-gray-500">Loading permissions…</p>;
+  if (!all) return <p className="text-sm text-muted">Loading permissions…</p>;
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {all.map((key) => (
-        <label key={key} className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={checked.has(key)} onChange={() => onToggle(key)} />
-          {key}
-        </label>
-      ))}
+    <div className="flex flex-wrap gap-1.5">
+      {all.map((key) => {
+        const on = checked.has(key);
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onToggle(key)}
+            aria-pressed={on}
+            className={cn(
+              "rounded-lg border px-2.5 py-1 font-mono text-[11px] transition-colors",
+              on
+                ? "border-brand bg-brand-soft text-brand-soft-foreground"
+                : "border-border text-muted hover:border-border-strong hover:text-foreground",
+            )}
+          >
+            {key}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -206,33 +274,45 @@ function StaffRow({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-900">
-            {user.displayName} <span className="font-normal text-gray-500">({user.email})</span>
-          </p>
-          <p className="text-xs text-gray-400">{user.isActive ? "Active" : "Deactivated"}</p>
+    <Card className="p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-muted text-xs font-medium text-muted">
+            {user.displayName.slice(0, 2).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              {user.displayName}
+              <Badge tone={user.isActive ? "success" : "neutral"}>
+                {user.isActive ? "Active" : "Deactivated"}
+              </Badge>
+            </p>
+            <p className="truncate text-xs text-subtle">{user.email}</p>
+          </div>
         </div>
-        <button onClick={toggleActive} disabled={saving} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">
+        <Button variant="secondary" size="sm" onClick={toggleActive} disabled={saving}>
           {user.isActive ? "Deactivate" : "Activate"}
-        </button>
+        </Button>
       </div>
 
-      <div className="mt-3">
+      <div className="mt-4 border-t border-border pt-4">
+        <p className="mb-2 text-xs font-medium text-muted">
+          Permissions
+          <span className="ml-1.5 font-normal text-subtle tabular">{checked.size} selected</span>
+        </p>
         <PermissionGrid all={allPermissions} checked={checked} onToggle={toggle} />
       </div>
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <div className="mt-3"><Alert>{error}</Alert></div>}
+
       {dirty && (
-        <button
-          onClick={savePermissions}
-          disabled={saving}
-          className="mt-3 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save permission changes"}
-        </button>
+        <div className="mt-4 flex items-center gap-3">
+          <Button onClick={savePermissions} disabled={saving} size="sm">
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+          <span className="text-xs text-subtle">Takes effect on their next sign-in.</span>
+        </div>
       )}
-    </div>
+    </Card>
   );
 }

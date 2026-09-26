@@ -5,15 +5,28 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { NavBar } from "@/components/nav-bar";
+import { ChartIcon } from "@/components/ui/icons";
+import {
+  Alert,
+  Card,
+  EmptyState,
+  Input,
+  Label,
+  PageHeader,
+  PageShell,
+  Pagination,
+  TableSkeleton,
+  cn,
+} from "@/components/ui/primitives";
 import type { PagedResult, SalesByCategoryRow, SalesByDayRow, SalesByProductRow } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 
 type Tab = "day" | "product" | "category";
 const TABS: { key: Tab; label: string }[] = [
-  { key: "day", label: "By Day" },
-  { key: "product", label: "By Product" },
-  { key: "category", label: "By Category" },
+  { key: "day", label: "By day" },
+  { key: "product", label: "By product" },
+  { key: "category", label: "By category" },
 ];
 
 function toIsoRangeStart(date: string): string {
@@ -80,146 +93,180 @@ export default function ReportsPage() {
     setPage(1);
   }
 
+  // Totals for the page in view. Labelled "on this page" rather than
+  // "total" because the API pages the rows — claiming a period total here
+  // would be wrong the moment there's more than one page.
+  const dayRows = dayResult?.items ?? [];
+  const revenue = dayRows.reduce((s, r) => s + r.revenue, 0);
+  const orders = dayRows.reduce((s, r) => s + r.orderCount, 0);
+
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-4xl flex-1 p-6">
-        <h1 className="mb-6 text-xl font-semibold">Reports</h1>
+      <PageShell>
+        <PageHeader title="Reports" description="Sales performance over a date range." />
 
-        <div className="mb-4 flex flex-wrap items-end gap-4">
-          <label className="text-sm text-gray-600">
-            From
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => {
-                setFrom(e.target.value);
-                setPage(1);
-              }}
-              className="mt-1 block rounded-md border border-gray-300 px-2 py-1"
-            />
-          </label>
-          <label className="text-sm text-gray-600">
-            To
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => {
-                setTo(e.target.value);
-                setPage(1);
-              }}
-              className="mt-1 block rounded-md border border-gray-300 px-2 py-1"
-            />
-          </label>
-        </div>
+        <Card className="mb-5">
+          <div className="flex flex-wrap items-end gap-4 p-4">
+            <label className="block">
+              <Label>From</Label>
+              <Input
+                type="date"
+                value={from}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  setPage(1);
+                }}
+                className="w-44"
+              />
+            </label>
+            <label className="block">
+              <Label>To</Label>
+              <Input
+                type="date"
+                value={to}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  setPage(1);
+                }}
+                className="w-44"
+              />
+            </label>
+          </div>
+        </Card>
 
-        <div className="mb-4 flex gap-4 border-b border-gray-200 text-sm">
+        {tab === "day" && dayRows.length > 0 && (
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            <Stat label="Revenue on this page" value={revenue.toFixed(2)} />
+            <Stat label="Orders on this page" value={String(orders)} />
+            <Stat
+              label="Average order value"
+              value={orders > 0 ? (revenue / orders).toFixed(2) : "—"}
+            />
+          </div>
+        )}
+
+        <div className="mb-4 flex gap-1 border-b border-border" role="tablist">
           {TABS.map((t) => (
             <button
               key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
               onClick={() => switchTab(t.key)}
-              className={`-mb-px border-b-2 px-1 py-2 ${
-                tab === t.key ? "border-gray-900 font-semibold text-gray-900" : "border-transparent text-gray-500 hover:text-gray-900"
-              }`}
+              className={cn(
+                "-mb-px border-b-2 px-3 py-2 text-sm transition-colors",
+                tab === t.key
+                  ? "border-brand font-medium text-foreground"
+                  : "border-transparent text-muted hover:text-foreground",
+              )}
             >
               {t.label}
             </button>
           ))}
         </div>
 
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+        {error && <div className="mb-4"><Alert>{error}</Alert></div>}
 
-        {!result ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : result.items.length === 0 ? (
-          <p className="text-sm text-gray-500">No sales in this date range.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="w-full text-left text-sm">
-              {tab === "day" && (
-                <>
-                  <thead className="border-b border-gray-200 text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2">Date</th>
-                      <th className="px-3 py-2">Orders</th>
-                      <th className="px-3 py-2">Revenue</th>
-                      <th className="px-3 py-2">Avg Order Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(dayResult?.items ?? []).map((row) => (
-                      <tr key={row.date} className="border-b border-gray-100 last:border-0">
-                        <td className="px-3 py-2">{row.date}</td>
-                        <td className="px-3 py-2">{row.orderCount}</td>
-                        <td className="px-3 py-2">{row.revenue.toFixed(2)}</td>
-                        <td className="px-3 py-2">{row.averageOrderValue.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </>
-              )}
-              {tab === "product" && (
-                <>
-                  <thead className="border-b border-gray-200 text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2">SKU</th>
-                      <th className="px-3 py-2">Product</th>
-                      <th className="px-3 py-2">Qty Sold</th>
-                      <th className="px-3 py-2">Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(productResult?.items ?? []).map((row) => (
-                      <tr key={row.productId} className="border-b border-gray-100 last:border-0">
-                        <td className="px-3 py-2">{row.sku}</td>
-                        <td className="px-3 py-2">{row.name}</td>
-                        <td className="px-3 py-2">{row.quantitySold}</td>
-                        <td className="px-3 py-2">{row.revenue.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </>
-              )}
-              {tab === "category" && (
-                <>
-                  <thead className="border-b border-gray-200 text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2">Category</th>
-                      <th className="px-3 py-2">Qty Sold</th>
-                      <th className="px-3 py-2">Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(categoryResult?.items ?? []).map((row) => (
-                      <tr key={row.categoryId ?? "uncategorized"} className="border-b border-gray-100 last:border-0">
-                        <td className="px-3 py-2">{row.categoryName}</td>
-                        <td className="px-3 py-2">{row.quantitySold}</td>
-                        <td className="px-3 py-2">{row.revenue.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </>
-              )}
-            </table>
-          </div>
-        )}
+        <Card className="overflow-hidden">
+          {!result ? (
+            <TableSkeleton rows={6} cols={4} />
+          ) : result.items.length === 0 ? (
+            <EmptyState
+              icon={<ChartIcon />}
+              title="No sales in this range"
+              description="Widen the date range, or record a sale from Checkout."
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  {tab === "day" && (
+                    <>
+                      <Head cols={["Date", "Orders", "Revenue", "Avg order value"]} numericFrom={1} />
+                      <tbody className="divide-y divide-border">
+                        {dayRows.map((row) => (
+                          <tr key={row.date} className="transition-colors hover:bg-surface-hover">
+                            <td className="px-5 py-3 font-medium">{row.date}</td>
+                            <td className="px-5 py-3 text-right tabular">{row.orderCount}</td>
+                            <td className="px-5 py-3 text-right font-medium tabular">{row.revenue.toFixed(2)}</td>
+                            <td className="px-5 py-3 text-right text-muted tabular">
+                              {row.averageOrderValue.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  )}
 
-        {result && result.totalCount > 0 && (
-          <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
-            <span>
-              Page {result.page} of {totalPages} ({result.totalCount} total)
-            </span>
-            <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50">
-                Previous
-              </button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50">
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
+                  {tab === "product" && (
+                    <>
+                      <Head cols={["Product", "SKU", "Qty sold", "Revenue"]} numericFrom={2} />
+                      <tbody className="divide-y divide-border">
+                        {(productResult?.items ?? []).map((row) => (
+                          <tr key={row.productId} className="transition-colors hover:bg-surface-hover">
+                            <td className="px-5 py-3 font-medium">{row.name}</td>
+                            <td className="px-5 py-3 font-mono text-xs text-muted">{row.sku}</td>
+                            <td className="px-5 py-3 text-right tabular">{row.quantitySold}</td>
+                            <td className="px-5 py-3 text-right font-medium tabular">{row.revenue.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  )}
+
+                  {tab === "category" && (
+                    <>
+                      <Head cols={["Category", "Qty sold", "Revenue"]} numericFrom={1} />
+                      <tbody className="divide-y divide-border">
+                        {(categoryResult?.items ?? []).map((row) => (
+                          <tr
+                            key={row.categoryId ?? "uncategorized"}
+                            className="transition-colors hover:bg-surface-hover"
+                          >
+                            <td className="px-5 py-3 font-medium">{row.categoryName}</td>
+                            <td className="px-5 py-3 text-right tabular">{row.quantitySold}</td>
+                            <td className="px-5 py-3 text-right font-medium tabular">{row.revenue.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  )}
+                </table>
+              </div>
+              <Pagination
+                page={result.page}
+                totalPages={totalPages}
+                totalCount={result.totalCount}
+                onPrev={() => setPage((p) => p - 1)}
+                onNext={() => setPage((p) => p + 1)}
+              />
+            </>
+          )}
+        </Card>
+      </PageShell>
     </>
+  );
+}
+
+function Head({ cols, numericFrom }: { cols: string[]; numericFrom: number }) {
+  return (
+    <thead>
+      <tr className="border-b border-border text-xs text-muted">
+        {cols.map((c, i) => (
+          <th key={c} scope="col" className={cn("px-5 py-2.5 font-medium", i >= numericFrom && "text-right")}>
+            {c}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="px-5 py-4">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{value}</p>
+    </Card>
   );
 }

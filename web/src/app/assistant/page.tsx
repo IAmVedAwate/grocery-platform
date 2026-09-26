@@ -5,14 +5,24 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { NavBar } from "@/components/nav-bar";
+import { AlertIcon, ArrowRightIcon, FileIcon, SparkIcon } from "@/components/ui/icons";
+import { Badge, Button, Card, Input, PageShell, cn } from "@/components/ui/primitives";
 import type { AssistantAnswer } from "@/lib/types";
 
 type Turn = { question: string; answer: AssistantAnswer } | { question: string; error: string };
+
+const SUGGESTIONS = [
+  "What's low on stock?",
+  "How did we do yesterday?",
+  "What's our return policy?",
+  "Which purchase orders are still open?",
+];
 
 export default function AssistantPage() {
   const { accessToken, isLoading, authFetch } = useAuth();
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -24,13 +34,12 @@ export default function AssistantPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns]);
+  }, [turns, isAsking]);
 
   if (isLoading || !accessToken) return null;
 
-  async function handleAsk(e: FormEvent) {
-    e.preventDefault();
-    const q = question.trim();
+  async function ask(text: string) {
+    const q = text.trim();
     if (!q || isAsking) return;
 
     setQuestion("");
@@ -46,81 +55,139 @@ export default function AssistantPage() {
       setTurns((prev) => [...prev, { question: q, error: message }]);
     } finally {
       setIsAsking(false);
+      inputRef.current?.focus();
     }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void ask(question);
   }
 
   return (
     <>
       <NavBar />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col p-6">
-        <h1 className="mb-1 text-xl font-semibold">Assistant</h1>
-        <p className="mb-6 text-sm text-gray-500">
-          Ask about live inventory, sales, purchasing, or anything in your uploaded documents. Every answer
-          respects your own permissions — the assistant can&rsquo;t see or do anything you couldn&rsquo;t
-          yourself.
-        </p>
-
-        <div className="flex-1 space-y-4">
-          {turns.length === 0 && (
-            <p className="text-sm text-gray-400">
-              Try: &ldquo;What&rsquo;s low on stock?&rdquo; or &ldquo;What&rsquo;s our return policy?&rdquo;
-            </p>
-          )}
-
-          {turns.map((turn, i) => (
-            <div key={i} className="space-y-2">
-              <div className="ml-auto max-w-[80%] rounded-lg bg-gray-900 px-4 py-2 text-sm text-white">
-                {turn.question}
-              </div>
-
-              {"error" in turn ? (
-                <div className="max-w-[80%] rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
-                  {turn.error}
-                </div>
-              ) : (
-                <div className="max-w-[80%] rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-900">
-                  <p className="whitespace-pre-wrap">{turn.answer.text}</p>
-
-                  {turn.answer.toolsUsed.length > 0 && (
-                    <p className="mt-2 text-xs text-gray-400">Used: {turn.answer.toolsUsed.join(", ")}</p>
-                  )}
-
-                  {turn.answer.citations.length > 0 && (
-                    <div className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-500">
-                      <p className="font-medium">Sources</p>
-                      {turn.answer.citations.map((c, ci) => (
-                        <p key={ci}>
-                          {c.fileName}: &ldquo;{c.snippet}&rdquo;
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+      <PageShell width="narrow">
+        <div className="flex min-h-[calc(100vh-10rem)] flex-col">
+          <div className="mb-6 flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-brand-soft text-brand-soft-foreground">
+              <SparkIcon className="size-5" />
+            </span>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight">Assistant</h1>
+              <p className="text-xs text-muted">
+                Answers from your live data and uploaded documents — limited to your own permissions.
+              </p>
             </div>
-          ))}
+          </div>
 
-          {isAsking && <p className="text-sm text-gray-400">Thinking…</p>}
-          <div ref={bottomRef} />
-        </div>
+          <div className="flex-1 space-y-5">
+            {turns.length === 0 && !isAsking && (
+              <div className="animate-[--animate-fade-up]">
+                <p className="mb-3 text-xs font-medium tracking-wide text-subtle uppercase">Try asking</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => void ask(s)}
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left text-sm shadow-card transition-colors hover:border-border-strong hover:bg-surface-hover"
+                    >
+                      <span>{s}</span>
+                      <ArrowRightIcon className="size-4 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        <form onSubmit={handleAsk} className="mt-6 flex gap-2">
-          <input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask a question…"
-            disabled={isAsking}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={isAsking || !question.trim()}
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+            {turns.map((turn, i) => (
+              <div key={i} className="animate-[--animate-fade-up] space-y-2.5">
+                <div className="flex justify-end">
+                  <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-brand px-4 py-2.5 text-sm text-brand-foreground">
+                    {turn.question}
+                  </p>
+                </div>
+
+                {"error" in turn ? (
+                  <div className="flex max-w-[85%] items-start gap-2 rounded-2xl rounded-bl-sm bg-danger-soft px-4 py-2.5 text-sm text-danger-soft-foreground">
+                    <AlertIcon className="mt-0.5 size-4 shrink-0" />
+                    <span>{turn.error}</span>
+                  </div>
+                ) : (
+                  <Card className="max-w-[92%] overflow-hidden">
+                    <p className="px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">{turn.answer.text}</p>
+
+                    {(turn.answer.toolsUsed.length > 0 || turn.answer.citations.length > 0) && (
+                      <div className="space-y-2.5 border-t border-border bg-surface-muted px-4 py-3">
+                        {turn.answer.toolsUsed.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] text-subtle">Used</span>
+                            {turn.answer.toolsUsed.map((tool) => (
+                              <Badge key={tool} tone="brand">
+                                <code className="font-mono">{tool}</code>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                        {turn.answer.citations.length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="text-[11px] text-subtle">Sources</span>
+                            {turn.answer.citations.map((c, ci) => (
+                              <div key={ci} className="flex gap-2 rounded-lg bg-surface px-3 py-2">
+                                <FileIcon className="mt-0.5 size-3.5 shrink-0 text-subtle" />
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-medium">{c.fileName}</p>
+                                  <p className="mt-0.5 line-clamp-2 text-[11px] text-muted">{c.snippet}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Card>
+                )}
+              </div>
+            ))}
+
+            {isAsking && (
+              <div className="flex items-center gap-2 text-sm text-muted">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="size-1.5 animate-[--animate-shimmer] rounded-full bg-subtle"
+                    style={{ animationDelay: `${i * 160}ms` }}
+                  />
+                ))}
+                <span className="text-xs">Thinking…</span>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Sticks to the bottom of the viewport so the composer stays
+              reachable in a long conversation. */}
+          <form
+            onSubmit={handleSubmit}
+            className="sticky bottom-0 mt-6 flex gap-2 bg-background/80 py-3 backdrop-blur-xl"
           >
-            Ask
-          </button>
-        </form>
-      </main>
+            <Input
+              ref={inputRef}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Ask about inventory, sales, or your documents…"
+              disabled={isAsking}
+              aria-label="Ask the assistant"
+              className={cn("h-11", isAsking && "opacity-60")}
+            />
+            <Button type="submit" size="lg" disabled={isAsking || !question.trim()}>
+              Ask
+            </Button>
+          </form>
+        </div>
+      </PageShell>
     </>
   );
 }

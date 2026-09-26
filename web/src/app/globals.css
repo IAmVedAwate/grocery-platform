@@ -1,26 +1,189 @@
 @import "tailwindcss";
 
+/* Class-based dark mode so the navbar toggle can override the OS setting.
+   Tailwind v4 defaults `dark:` to prefers-color-scheme; this rebinds it to
+   a .dark class that the theme script puts on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------
+   Semantic tokens. Everything below references these, never raw palette
+   values, so dark mode is one block of overrides rather than a dark:
+   variant sprinkled on every element.
+   --------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8f8f9;
+  --surface: #ffffff;
+  --surface-muted: #f4f4f5;
+  --surface-hover: #fafafa;
+  --border: #e6e6e9;
+  --border-strong: #d4d4d8;
+
+  --foreground: #18181b;
+  --foreground-muted: #62626b;
+  --foreground-subtle: #9a9aa3;
+
+  /* Emerald reads "fresh produce" without the overused SaaS indigo. */
+  --brand: #047857;
+  --brand-hover: #036249;
+  --brand-foreground: #ffffff;
+  --brand-soft: #ecfdf5;
+  --brand-soft-foreground: #065f46;
+  --brand-ring: #05966940;
+
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --danger-soft-foreground: #991b1b;
+  --warning: #d97706;
+  --warning-soft: #fffbeb;
+  --warning-soft-foreground: #92400e;
+  --success: #059669;
+  --success-soft: #ecfdf5;
+  --success-soft-foreground: #065f46;
+
+  --overlay: #18181b26;
+
+  --shadow-card: 0 1px 2px 0 #18181b0d, 0 1px 3px 0 #18181b0a;
+  --shadow-raised: 0 4px 12px -2px #18181b14, 0 2px 6px -2px #18181b0f;
+  --shadow-overlay: 0 24px 48px -12px #18181b2e, 0 8px 20px -8px #18181b1f;
 }
 
+.dark {
+  --background: #09090b;
+  --surface: #131316;
+  --surface-muted: #1b1b1f;
+  --surface-hover: #1e1e23;
+  --border: #27272d;
+  --border-strong: #3a3a42;
+
+  --foreground: #f4f4f5;
+  --foreground-muted: #a1a1aa;
+  --foreground-subtle: #71717a;
+
+  --brand: #10b981;
+  --brand-hover: #34d399;
+  --brand-foreground: #04231a;
+  --brand-soft: #052e21;
+  --brand-soft-foreground: #6ee7b7;
+  --brand-ring: #10b98159;
+
+  --danger: #f87171;
+  --danger-soft: #2a1113;
+  --danger-soft-foreground: #fca5a5;
+  --warning: #fbbf24;
+  --warning-soft: #2a1f0a;
+  --warning-soft-foreground: #fcd34d;
+  --success: #10b981;
+  --success-soft: #052e21;
+  --success-soft-foreground: #6ee7b7;
+
+  --overlay: #00000080;
+
+  --shadow-card: 0 1px 2px 0 #00000059;
+  --shadow-raised: 0 4px 12px -2px #00000066;
+  --shadow-overlay: 0 24px 48px -12px #000000a6;
+}
+
+/* Expose tokens as Tailwind utilities: bg-surface, text-muted, border-border… */
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted: var(--foreground-muted);
+  --color-subtle: var(--foreground-subtle);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-foreground: var(--brand-soft-foreground);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-foreground: var(--warning-soft-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-foreground: var(--success-soft-foreground);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
+
+  --animate-fade-up: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.2s ease-out both;
+  --animate-slide-in-right: slide-in-right 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-slide-up: slide-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  50% { opacity: 0.45; }
 }
 
+/* ---------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------- */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Previously hard-set to Arial, which silently overrode the Geist font
+     loaded in layout.tsx — the whole app rendered in the fallback. */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One consistent keyboard-focus treatment app-wide. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Numeric columns line up and don't jitter as values change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid var(--background);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--foreground-subtle); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

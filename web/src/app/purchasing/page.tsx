@@ -102,38 +102,38 @@ export default function PurchasingPage() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-4xl flex-1 p-6">
+      <main className="mx-auto w-full max-w-4xl flex-1 animate-[--animate-fade-up] px-4 py-6 sm:px-6 sm:py-8">
         <h1 className="mb-6 text-xl font-semibold">Purchasing</h1>
-        {loadError && <p className="mb-4 text-sm text-red-600">{loadError}</p>}
+        {loadError && <p className="mb-4 text-sm text-danger">{loadError}</p>}
 
-        <section className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-medium text-gray-700">Suppliers</h2>
+        <section className="mb-8 rounded-xl border border-border bg-surface shadow-card p-4">
+          <h2 className="mb-3 text-sm font-medium text-muted">Suppliers</h2>
           <form onSubmit={createSupplier} className="mb-3 flex items-end gap-3">
             <Field label="New supplier name" value={supplierName} onChange={setSupplierName} />
-            <button type="submit" className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
+            <button type="submit" className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground hover:bg-brand-hover">
               Add
             </button>
           </form>
-          {supplierError && <p className="mb-2 text-sm text-red-600">{supplierError}</p>}
+          {supplierError && <p className="mb-2 text-sm text-danger">{supplierError}</p>}
           <ul className="flex flex-wrap gap-2 text-sm">
             {suppliers.map((s) => (
-              <li key={s.id} className="rounded-full border border-gray-200 px-3 py-1">
+              <li key={s.id} className="rounded-full border border-border px-3 py-1">
                 {s.name}
               </li>
             ))}
           </ul>
         </section>
 
-        <section className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-medium text-gray-700">Create purchase order</h2>
+        <section className="mb-8 rounded-xl border border-border bg-surface shadow-card p-4">
+          <h2 className="mb-3 text-sm font-medium text-muted">Create purchase order</h2>
           <form onSubmit={createOrder} className="space-y-3">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Supplier</span>
+              <span className="mb-1 block text-sm font-medium text-muted">Supplier</span>
               <select
                 required
                 value={orderSupplierId}
                 onChange={(e) => setOrderSupplierId(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
               >
                 <option value="" disabled>
                   Select a supplier…
@@ -149,12 +149,12 @@ export default function PurchasingPage() {
             {lines.map((line, i) => (
               <div key={i} className="flex flex-wrap items-end gap-3">
                 <label className="block flex-1">
-                  <span className="mb-1 block text-xs font-medium text-gray-700">Product</span>
+                  <span className="mb-1 block text-xs font-medium text-muted">Product</span>
                   <select
                     required
                     value={line.productId}
                     onChange={(e) => updateLine(i, { productId: e.target.value })}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-gray-500 focus:outline-none"
+                    className="w-full rounded-md border border-border px-3 py-1.5 text-sm focus:border-brand focus:outline-none"
                   >
                     <option value="" disabled>
                       Select a product…
@@ -167,28 +167,28 @@ export default function PurchasingPage() {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-gray-700">Quantity</span>
+                  <span className="mb-1 block text-xs font-medium text-muted">Quantity</span>
                   <input
                     required
                     type="number"
                     value={line.quantity}
                     onChange={(e) => updateLine(i, { quantity: e.target.value })}
-                    className="w-24 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-gray-500 focus:outline-none"
+                    className="w-24 rounded-md border border-border px-3 py-1.5 text-sm focus:border-brand focus:outline-none"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-gray-700">Unit cost</span>
+                  <span className="mb-1 block text-xs font-medium text-muted">Unit cost</span>
                   <input
                     required
                     type="number"
                     step="0.01"
                     value={line.unitCost}
                     onChange={(e) => updateLine(i, { unitCost: e.target.value })}
-                    className="w-24 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-gray-500 focus:outline-none"
+                    className="w-24 rounded-md border border-border px-3 py-1.5 text-sm focus:border-brand focus:outline-none"
                   />
                 </label>
                 {lines.length > 1 && (
-                  <button type="button" onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))} className="text-sm text-red-600 underline">
+                  <button type="button" onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))} className="text-sm text-danger underline">
                     Remove
                   </button>
                 )}
@@ -197,17 +197,17 @@ export default function PurchasingPage() {
             <button
               type="button"
               onClick={() => setLines((prev) => [...prev, { productId: "", quantity: "", unitCost: "" }])}
-              className="text-sm text-gray-900 underline"
+              className="text-sm text-foreground underline"
             >
               + Add line
             </button>
 
-            {orderError && <p className="text-sm text-red-600">{orderError}</p>}
+            {orderError && <p className="text-sm text-danger">{orderError}</p>}
             <div>
               <button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
               >
                 {isSaving ? "Creating…" : "Create purchase order"}
               </button>
@@ -216,13 +216,13 @@ export default function PurchasingPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-medium text-gray-700">Purchase orders</h2>
+          <h2 className="mb-3 text-sm font-medium text-muted">Purchase orders</h2>
           {orders.length === 0 ? (
-            <p className="text-sm text-gray-500">No purchase orders yet.</p>
+            <p className="text-sm text-muted">No purchase orders yet.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-card">
               <table className="w-full text-left text-sm">
-                <thead className="border-b border-gray-200 text-gray-500">
+                <thead className="border-b border-border text-muted">
                   <tr>
                     <th className="px-3 py-2">Supplier</th>
                     <th className="px-3 py-2">Status</th>
@@ -233,7 +233,7 @@ export default function PurchasingPage() {
                 </thead>
                 <tbody>
                   {orders.map((o) => (
-                    <tr key={o.id} className="border-b border-gray-100 last:border-0">
+                    <tr key={o.id} className="border-b border-border last:border-0">
                       <td className="px-3 py-2">{suppliers.find((s) => s.id === o.supplierId)?.name ?? o.supplierId}</td>
                       <td className="px-3 py-2">
                         <StatusBadge status={o.status} />
@@ -241,7 +241,7 @@ export default function PurchasingPage() {
                       <td className="px-3 py-2">{o.items.length}</td>
                       <td className="px-3 py-2">{new Date(o.createdAtUtc).toLocaleDateString()}</td>
                       <td className="px-3 py-2">
-                        <Link href={`/purchasing/${o.id}`} className="text-gray-900 underline">
+                        <Link href={`/purchasing/${o.id}`} className="text-foreground underline">
                           View
                         </Link>
                       </td>

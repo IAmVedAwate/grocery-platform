@@ -1,27 +1,46 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
-import { Field } from "@/components/field";
 import { NavBar } from "@/components/nav-bar";
 import { ProductImage } from "@/components/product-image";
+import { Drawer } from "@/components/ui/drawer";
+import { BoxIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  PageHeader,
+  PageShell,
+  Pagination,
+  TableSkeleton,
+} from "@/components/ui/primitives";
 import type { PagedResult, ProductDto } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 
-export default function ProductsPage() {
+function ProductsContent() {
   const { accessToken, isLoading, authFetch } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [result, setResult] = useState<PagedResult<ProductDto> | null>(null);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  // Seeded from ?search= so the ⌘K palette can deep-link into a filtered list.
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [listError, setListError] = useState<string | null>(null);
 
   // Product registration is a P0 speed criterion (docs/PRD.md §7) — only
   // sku/name/price/tax are required, everything else is optional.
+  const [formOpen, setFormOpen] = useState(false);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
@@ -32,17 +51,26 @@ export default function ProductsPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
 
+  // Typing no longer fires a request per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const loadProducts = useCallback(async () => {
     setListError(null);
     try {
       const query = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
-      if (search.trim()) query.set("search", search.trim());
+      if (debouncedSearch.trim()) query.set("search", debouncedSearch.trim());
       const data = await authFetch<PagedResult<ProductDto>>(`/api/v1/products?${query}`);
       setResult(data);
     } catch (err) {
       setListError(err instanceof ApiError ? err.message : "Could not load products.");
     }
-  }, [authFetch, page, search]);
+  }, [authFetch, page, debouncedSearch]);
 
   useEffect(() => {
     if (!isLoading && !accessToken) router.push("/login");
@@ -52,8 +80,7 @@ export default function ProductsPage() {
     // loadProducts is async and only calls setState after its await —
     // this is the standard "fetch when a dependency changes" pattern, not
     // the synchronous-setState-in-effect case react-hooks/set-state-in-effect
-    // warns about. TanStack Query replaces this manual fetch effect when
-    // real UI work continues past this scaffold (see web/README.md).
+    // warns about.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (accessToken) void loadProducts();
   }, [accessToken, loadProducts]);
@@ -83,6 +110,7 @@ export default function ProductsPage() {
       setTaxRatePercent("0");
       setBarcode("");
       setPage(1);
+      setFormOpen(false);
       await loadProducts();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Could not save product.");
@@ -113,125 +141,164 @@ export default function ProductsPage() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-4xl flex-1 p-6">
-      <h1 className="mb-6 text-xl font-semibold">Products</h1>
-
-      <form onSubmit={handleCreate} className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-medium text-gray-700">Register a product</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="SKU" value={sku} onChange={setSku} />
-          <Field label="Name" value={name} onChange={setName} />
-          <Field label="Barcode" value={barcode} onChange={setBarcode} required={false} />
-          <Field label="Price" type="number" value={price} onChange={setPrice} />
-          <Field label="Tax %" type="number" value={taxRatePercent} onChange={setTaxRatePercent} />
-        </div>
-        {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="mt-3 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-        >
-          {isSaving ? "Saving…" : "Add product"}
-        </button>
-      </form>
-
-      <div className="mb-3 flex items-center gap-2">
-        <input
-          value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
-          placeholder="Search by name, SKU, or barcode…"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+      <PageShell>
+        <PageHeader
+          title="Products"
+          description="Your catalog — searchable by name, SKU or barcode."
+          action={
+            <Button onClick={() => setFormOpen(true)}>
+              <PlusIcon className="size-4" />
+              New product
+            </Button>
+          }
         />
-      </div>
 
-      {listError && <p className="mb-3 text-sm text-red-600">{listError}</p>}
-      {imageError && <p className="mb-3 text-sm text-red-600">{imageError}</p>}
-
-      {!result ? (
-        <p className="text-sm text-gray-500">Loading…</p>
-      ) : result.items.length === 0 ? (
-        <p className="text-sm text-gray-500">No products yet.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-gray-200 text-gray-500">
-              <tr>
-                <th className="px-3 py-2">Image</th>
-                <th className="px-3 py-2">SKU</th>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Price</th>
-                <th className="px-3 py-2">Tax %</th>
-                <th className="px-3 py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.items.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-gray-100 last:border-0"
-                  // 50% opacity so text stays readable over any color
-                  // (docs/PRD.md — "find a product by color" browsing:
-                  // people often recall a product's color before its name).
-                  style={p.dominantColorHex ? { backgroundColor: `${p.dominantColorHex}80` } : undefined}
-                >
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <ProductImage productId={p.id} hasImage={p.hasImage} />
-                      <label className="cursor-pointer text-xs text-gray-500 underline">
-                        {uploadingId === p.id ? "Uploading…" : p.hasImage ? "Change" : "Upload"}
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          className="hidden"
-                          disabled={uploadingId === p.id}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            e.target.value = "";
-                            if (file) void handleImageChange(p.id, file);
-                          }}
-                        />
-                      </label>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">{p.sku}</td>
-                  <td className="px-3 py-2">{p.name}</td>
-                  <td className="px-3 py-2">{p.price.toFixed(2)}</td>
-                  <td className="px-3 py-2">{p.taxRatePercent}</td>
-                  <td className="px-3 py-2">{p.isActive ? "Active" : "Inactive"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="relative mb-4 max-w-sm">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search products…"
+            aria-label="Search products"
+            className="pl-9"
+          />
         </div>
-      )}
 
-      {result && result.totalCount > 0 && (
-        <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
-          <span>
-            Page {result.page} of {totalPages} ({result.totalCount} total)
-          </span>
-          <div className="flex gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50"
-            >
-              Next
-            </button>
+        {listError && <div className="mb-4"><Alert>{listError}</Alert></div>}
+        {imageError && <div className="mb-4"><Alert>{imageError}</Alert></div>}
+
+        <Card className="overflow-hidden">
+          {!result ? (
+            <TableSkeleton rows={6} cols={5} />
+          ) : result.items.length === 0 ? (
+            <EmptyState
+              icon={<BoxIcon />}
+              title={debouncedSearch ? "No matching products" : "No products yet"}
+              description={
+                debouncedSearch
+                  ? `Nothing matches “${debouncedSearch}”.`
+                  : "Register your first product to start selling."
+              }
+              action={
+                !debouncedSearch && (
+                  <Button onClick={() => setFormOpen(true)}>
+                    <PlusIcon className="size-4" />
+                    New product
+                  </Button>
+                )
+              }
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs text-muted">
+                      <th scope="col" className="px-5 py-2.5 font-medium">Product</th>
+                      <th scope="col" className="px-5 py-2.5 font-medium">SKU</th>
+                      <th scope="col" className="px-5 py-2.5 text-right font-medium">Price</th>
+                      <th scope="col" className="px-5 py-2.5 text-right font-medium">Tax</th>
+                      <th scope="col" className="px-5 py-2.5 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {result.items.map((p) => (
+                      <tr key={p.id} className="transition-colors hover:bg-surface-hover">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className="relative shrink-0">
+                              <ProductImage productId={p.id} hasImage={p.hasImage} />
+                              {/* The dominant colour sits as a dot beside the
+                                  thumbnail rather than tinting the whole row —
+                                  it stays a usable "find it by colour" cue
+                                  (docs/PRD.md) without wrecking text contrast. */}
+                              {p.dominantColorHex && (
+                                <span
+                                  aria-hidden="true"
+                                  title={p.dominantColorHex}
+                                  className="absolute -right-1 -bottom-1 size-3 rounded-full border-2 border-surface"
+                                  style={{ backgroundColor: p.dominantColorHex }}
+                                />
+                              )}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{p.name}</p>
+                              <label className="cursor-pointer text-xs text-subtle underline-offset-2 hover:text-muted hover:underline">
+                                {uploadingId === p.id ? "Uploading…" : p.hasImage ? "Change image" : "Add image"}
+                                <input
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/webp"
+                                  className="hidden"
+                                  disabled={uploadingId === p.id}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = "";
+                                    if (file) void handleImageChange(p.id, file);
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3 font-mono text-xs text-muted">{p.sku}</td>
+                        <td className="px-5 py-3 text-right font-medium tabular">{p.price.toFixed(2)}</td>
+                        <td className="px-5 py-3 text-right text-muted tabular">{p.taxRatePercent}%</td>
+                        <td className="px-5 py-3">
+                          <Badge tone={p.isActive ? "success" : "neutral"}>{p.isActive ? "Active" : "Inactive"}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                page={result.page}
+                totalPages={totalPages}
+                totalCount={result.totalCount}
+                onPrev={() => setPage((p) => p - 1)}
+                onNext={() => setPage((p) => p + 1)}
+              />
+            </>
+          )}
+        </Card>
+      </PageShell>
+
+      <Drawer
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title="New product"
+        description="SKU, name and price are all that's required."
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setFormOpen(false)}>
+              Cancel
+            </Button>
+            <Button form="new-product" type="submit" disabled={isSaving}>
+              {isSaving ? "Saving…" : "Add product"}
+            </Button>
           </div>
-        </div>
-      )}
-      </main>
+        }
+      >
+        <form id="new-product" onSubmit={handleCreate} className="space-y-4 p-5">
+          <Field label="SKU" value={sku} onChange={setSku} placeholder="RICE-5KG" />
+          <Field label="Name" value={name} onChange={setName} placeholder="Basmati Rice 5kg" />
+          <Field label="Barcode" hint="optional" value={barcode} onChange={setBarcode} required={false} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Price" type="number" step="0.01" min="0" value={price} onChange={setPrice} placeholder="0.00" />
+            <Field label="Tax %" type="number" step="0.01" min="0" value={taxRatePercent} onChange={setTaxRatePercent} />
+          </div>
+          {formError && <Alert>{formError}</Alert>}
+        </form>
+      </Drawer>
     </>
+  );
+}
+
+export default function ProductsPage() {
+  // useSearchParams needs a Suspense boundary to stay statically rendered.
+  return (
+    <Suspense fallback={null}>
+      <ProductsContent />
+    </Suspense>
   );
 }

@@ -87,10 +87,10 @@ export default function PurchaseOrderDetailPage() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <main className="mx-auto w-full max-w-3xl flex-1 animate-[--animate-fade-up] px-4 py-6 sm:px-6 sm:py-8">
+        {error && <p className="text-sm text-danger">{error}</p>}
         {!order ? (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <p className="text-sm text-muted">Loading…</p>
         ) : (
           <>
             <div className="mb-4 flex items-center gap-3">
@@ -109,11 +109,11 @@ export default function PurchaseOrderDetailPage() {
                 <ActionButton label="Cancel" onClick={() => runAction("cancel")} disabled={isBusy} variant="danger" />
               )}
             </div>
-            {actionError && <p className="mb-4 text-sm text-red-600">{actionError}</p>}
+            {actionError && <p className="mb-4 text-sm text-danger">{actionError}</p>}
 
-            <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <div className="mb-6 overflow-x-auto rounded-xl border border-border bg-surface shadow-card">
               <table className="w-full text-left text-sm">
-                <thead className="border-b border-gray-200 text-gray-500">
+                <thead className="border-b border-border text-muted">
                   <tr>
                     <th className="px-3 py-2">Product</th>
                     <th className="px-3 py-2">Ordered</th>
@@ -124,7 +124,7 @@ export default function PurchaseOrderDetailPage() {
                 </thead>
                 <tbody>
                   {order.items.map((item) => (
-                    <tr key={item.productId} className="border-b border-gray-100 last:border-0">
+                    <tr key={item.productId} className="border-b border-border last:border-0">
                       <td className="px-3 py-2">{productName(item.productId)}</td>
                       <td className="px-3 py-2">{item.quantityOrdered}</td>
                       <td className="px-3 py-2">{item.unitCost.toFixed(2)}</td>
@@ -140,10 +140,10 @@ export default function PurchaseOrderDetailPage() {
                               onChange={(e) =>
                                 setReceiveQuantities((prev) => ({ ...prev, [item.productId]: e.target.value }))
                               }
-                              className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-gray-500 focus:outline-none"
+                              className="w-20 rounded-md border border-border px-2 py-1 text-sm focus:border-brand focus:outline-none"
                             />
                           ) : (
-                            <span className="text-gray-400">Complete</span>
+                            <span className="text-subtle">Complete</span>
                           )}
                         </td>
                       )}
@@ -158,7 +158,7 @@ export default function PurchaseOrderDetailPage() {
                 <button
                   type="submit"
                   disabled={isBusy}
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
                 >
                   Record receipt
                 </button>
@@ -187,7 +187,7 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
-        variant === "danger" ? "bg-red-600 hover:bg-red-500" : "bg-gray-900 hover:bg-gray-800"
+        variant === "danger" ? "bg-danger text-white hover:opacity-90" : "bg-brand text-brand-foreground hover:bg-brand-hover"
       }`}
     >
       {label}

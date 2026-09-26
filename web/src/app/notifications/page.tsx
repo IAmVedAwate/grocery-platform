@@ -5,6 +5,18 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { NavBar } from "@/components/nav-bar";
+import { AlertIcon, BellIcon, CheckIcon } from "@/components/ui/icons";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  PageShell,
+  Pagination,
+  cn,
+} from "@/components/ui/primitives";
 import type { NotificationDto, PagedResult } from "@/lib/types";
 
 const PAGE_SIZE = 20;
@@ -63,64 +75,125 @@ export default function NotificationsPage() {
     }
   }
 
+  const unreadCount = result?.items.filter((n) => !n.isRead).length ?? 0;
+
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-4xl flex-1 p-6">
-        <h1 className="mb-6 text-xl font-semibold">Notifications</h1>
-
-        <label className="mb-4 flex items-center gap-2 text-sm text-gray-600">
-          <input
-            type="checkbox"
-            checked={unreadOnly}
-            onChange={(e) => {
-              setUnreadOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          Unread only
-        </label>
-
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
-        {!result ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : result.items.length === 0 ? (
-          <p className="text-sm text-gray-500">{unreadOnly ? "No unread notifications." : "No notifications yet."}</p>
-        ) : (
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-            {result.items.map((n) => (
-              <li key={n.id} className="flex items-start justify-between gap-4 px-4 py-3">
-                <div>
-                  <p className={n.isRead ? "text-sm text-gray-500" : "text-sm font-medium text-gray-900"}>{describe(n)}</p>
-                  <p className="mt-1 text-xs text-gray-400">{new Date(n.createdAtUtc).toLocaleString()}</p>
-                </div>
-                {!n.isRead && (
-                  <button onClick={() => markRead(n.id)} className="shrink-0 rounded-md border border-gray-300 px-3 py-1 text-sm">
-                    Mark read
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {result && result.totalCount > 0 && (
-          <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
-            <span>
-              Page {result.page} of {totalPages} ({result.totalCount} total)
-            </span>
-            <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50">
-                Previous
-              </button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50">
-                Next
-              </button>
+      <PageShell>
+        <PageHeader
+          title="Notifications"
+          description="Low-stock alerts raised by the background sweep."
+          action={
+            /* Segmented filter instead of a bare checkbox — larger target
+               and the active state is legible at a glance. */
+            <div className="flex rounded-lg border border-border p-0.5">
+              {[
+                { label: "Unread", value: true },
+                { label: "All", value: false },
+              ].map((option) => (
+                <button
+                  key={option.label}
+                  onClick={() => {
+                    setUnreadOnly(option.value);
+                    setPage(1);
+                  }}
+                  aria-pressed={unreadOnly === option.value}
+                  className={cn(
+                    "h-8 rounded-md px-3 text-xs font-medium transition-colors",
+                    unreadOnly === option.value
+                      ? "bg-surface-muted text-foreground"
+                      : "text-muted hover:text-foreground",
+                  )}
+                >
+                  {option.label}
+                  {option.value && unreadCount > 0 && (
+                    <span className="ml-1.5 tabular">{unreadCount}</span>
+                  )}
+                </button>
+              ))}
             </div>
-          </div>
-        )}
-      </main>
+          }
+        />
+
+        {error && <div className="mb-4"><Alert>{error}</Alert></div>}
+
+        <Card className="overflow-hidden">
+          {!result ? (
+            <div className="divide-y divide-border">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <div className="size-8 animate-[--animate-shimmer] rounded-lg bg-surface-muted" />
+                  <div className="h-3.5 flex-1 animate-[--animate-shimmer] rounded bg-surface-muted" />
+                </div>
+              ))}
+            </div>
+          ) : result.items.length === 0 ? (
+            <EmptyState
+              icon={<BellIcon />}
+              title={unreadOnly ? "Nothing unread" : "No notifications yet"}
+              description={
+                unreadOnly
+                  ? "You're all caught up."
+                  : "Low-stock alerts will appear here as the background sweep finds them."
+              }
+            />
+          ) : (
+            <>
+              <ul className="divide-y divide-border">
+                {result.items.map((n) => (
+                  <li
+                    key={n.id}
+                    className={cn(
+                      "flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-surface-hover",
+                      !n.isRead && "bg-warning-soft/30",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg",
+                        n.isRead ? "bg-surface-muted text-subtle" : "bg-warning-soft text-warning-soft-foreground",
+                      )}
+                    >
+                      <AlertIcon className="size-4" />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <p className={cn("text-sm", n.isRead ? "text-muted" : "font-medium text-foreground")}>
+                        {describe(n)}
+                      </p>
+                      <p className="mt-1 flex items-center gap-2 text-xs text-subtle">
+                        <time dateTime={n.createdAtUtc}>
+                          {new Date(n.createdAtUtc).toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </time>
+                        {!n.isRead && <Badge tone="warning">New</Badge>}
+                      </p>
+                    </div>
+
+                    {!n.isRead && (
+                      <Button variant="secondary" size="sm" onClick={() => markRead(n.id)} className="shrink-0">
+                        <CheckIcon className="size-3.5" />
+                        Mark read
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <Pagination
+                page={result.page}
+                totalPages={totalPages}
+                totalCount={result.totalCount}
+                onPrev={() => setPage((p) => p - 1)}
+                onNext={() => setPage((p) => p + 1)}
+              />
+            </>
+          )}
+        </Card>
+      </PageShell>
     </>
   );
 }
+

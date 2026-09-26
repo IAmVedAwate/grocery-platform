@@ -47,7 +47,7 @@ export function ProductImage({ productId, hasImage, size = 40 }: { productId: st
     return (
       <div
         style={{ width: size, height: size }}
-        className="flex shrink-0 items-center justify-center rounded-md border border-dashed border-gray-300 text-[10px] text-gray-400"
+        className="flex shrink-0 items-center justify-center rounded-md border border-dashed border-border text-[10px] text-subtle"
       >
         No image
       </div>
@@ -55,5 +55,5 @@ export function ProductImage({ productId, hasImage, size = 40 }: { productId: st
   }
 
   // eslint-disable-next-line @next/next/no-img-element -- object URL, not a static asset next/image can optimize
-  return <img src={url} alt="" style={{ width: size, height: size }} className="shrink-0 rounded-md border border-gray-200 object-cover" />;
+  return <img src={url} alt="" style={{ width: size, height: size }} className="shrink-0 rounded-md border border-border object-cover" />;
 }

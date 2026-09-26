@@ -7,6 +7,17 @@ import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { NavBar } from "@/components/nav-bar";
 import { StatusBadge } from "@/components/status-badge";
+import { ArrowRightIcon, CartIcon, CloseIcon } from "@/components/ui/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  PageShell,
+  Pagination,
+  TableSkeleton,
+} from "@/components/ui/primitives";
 import type { PagedResult, SalesOrderDto } from "@/lib/types";
 
 const PAGE_SIZE = 20;
@@ -51,70 +62,101 @@ function SalesHistoryContent() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-4xl flex-1 p-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Sales History</h1>
-          {customerId && (
-            <Link href="/sales" className="text-sm text-gray-500 underline">
-              Clear customer filter
-            </Link>
+      <PageShell>
+        <PageHeader
+          title="Sales"
+          description={customerId ? "Purchase history for one customer." : "Every completed sale, newest first."}
+          action={
+            customerId ? (
+              <Link href="/sales">
+                <Button variant="secondary" size="sm">
+                  <CloseIcon className="size-3.5" />
+                  Clear customer filter
+                </Button>
+              </Link>
+            ) : undefined
+          }
+        />
+
+        {error && <div className="mb-4"><Alert>{error}</Alert></div>}
+
+        <Card className="overflow-hidden">
+          {!result ? (
+            <TableSkeleton rows={6} cols={4} />
+          ) : result.items.length === 0 ? (
+            <EmptyState
+              icon={<CartIcon />}
+              title={customerId ? "No sales for this customer" : "No sales yet"}
+              description="Completed sales appear here with their invoice and total."
+              action={
+                <Link href="/checkout">
+                  <Button>Start a sale</Button>
+                </Link>
+              }
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs text-muted">
+                      <th scope="col" className="px-5 py-2.5 font-medium">Invoice</th>
+                      <th scope="col" className="px-5 py-2.5 font-medium">Status</th>
+                      <th scope="col" className="px-5 py-2.5 text-right font-medium">Total</th>
+                      <th scope="col" className="px-5 py-2.5 font-medium">Date</th>
+                      <th scope="col" className="px-5 py-2.5">
+                        <span className="sr-only">View</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {result.items.map((o) => (
+                      <tr key={o.id} className="group transition-colors hover:bg-surface-hover">
+                        <td className="px-5 py-3">
+                          {/* Whole row is a link target via the invoice cell —
+                              nesting <a> around <tr> isn't valid HTML. */}
+                          <Link
+                            href={`/sales/${o.id}`}
+                            className="font-mono text-xs font-medium underline-offset-2 hover:underline"
+                          >
+                            {o.invoiceNumber}
+                          </Link>
+                        </td>
+                        <td className="px-5 py-3">
+                          <StatusBadge status={o.status} />
+                        </td>
+                        <td className="px-5 py-3 text-right font-medium tabular">{o.totalAmount.toFixed(2)}</td>
+                        <td className="px-5 py-3 text-muted">
+                          {new Date(o.createdAtUtc).toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <Link
+                            href={`/sales/${o.id}`}
+                            aria-label={`View sale ${o.invoiceNumber}`}
+                            className="inline-flex text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
+                          >
+                            <ArrowRightIcon className="size-4" />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                page={result.page}
+                totalPages={totalPages}
+                totalCount={result.totalCount}
+                onPrev={() => setPage((p) => p - 1)}
+                onNext={() => setPage((p) => p + 1)}
+              />
+            </>
           )}
-        </div>
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
-        {!result ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : result.items.length === 0 ? (
-          <p className="text-sm text-gray-500">No sales yet — head to Checkout to record one.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-gray-200 text-gray-500">
-                <tr>
-                  <th className="px-3 py-2">Invoice</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Total</th>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {result.items.map((o) => (
-                  <tr key={o.id} className="border-b border-gray-100 last:border-0">
-                    <td className="px-3 py-2">{o.invoiceNumber}</td>
-                    <td className="px-3 py-2">
-                      <StatusBadge status={o.status} />
-                    </td>
-                    <td className="px-3 py-2">{o.totalAmount.toFixed(2)}</td>
-                    <td className="px-3 py-2">{new Date(o.createdAtUtc).toLocaleString()}</td>
-                    <td className="px-3 py-2">
-                      <Link href={`/sales/${o.id}`} className="text-gray-900 underline">
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {result && result.totalCount > 0 && (
-          <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
-            <span>
-              Page {result.page} of {totalPages} ({result.totalCount} total)
-            </span>
-            <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50">
-                Previous
-              </button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-md border border-gray-300 px-3 py-1 disabled:opacity-50">
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
+        </Card>
+      </PageShell>
     </>
   );
 }

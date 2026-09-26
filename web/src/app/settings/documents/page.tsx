@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { NavBar } from "@/components/nav-bar";
+import { FileIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  PageShell,
+  TableSkeleton,
+} from "@/components/ui/primitives";
 import type { DocumentDto, PagedResult } from "@/lib/types";
 
 const PAGE_SIZE = 20;
@@ -72,56 +82,87 @@ export default function DocumentsSettingsPage() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-        <h1 className="mb-1 text-xl font-semibold">Documents</h1>
-        <p className="mb-6 text-sm text-gray-500">
-          Plain text or Markdown files the AI assistant can search — policies, supplier agreements, anything
-          worth grounding an answer in. Only .txt/.md, up to 2MB.
-        </p>
+      <PageShell width="narrow">
+        <PageHeader
+          title="Documents"
+          description="Plain text or Markdown the assistant can search — policies, supplier agreements, anything worth grounding an answer in. .txt/.md, up to 2MB."
+          action={
+            <>
+              {/* The native file input is visually replaced by a real button;
+                  the label keeps it keyboard- and screen-reader-accessible. */}
+              <input
+                ref={fileInputRef}
+                id="document-upload"
+                type="file"
+                accept=".txt,.md,text/plain,text/markdown"
+                disabled={isUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleUpload(file);
+                }}
+                className="sr-only"
+              />
+              <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                <PlusIcon className="size-4" />
+                {isUploading ? "Uploading…" : "Upload document"}
+              </Button>
+            </>
+          }
+        />
 
-        <div className="mb-6 flex items-center gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.md,text/plain,text/markdown"
-            disabled={isUploading}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleUpload(file);
-            }}
-            className="text-sm"
-          />
-          {isUploading && <span className="text-sm text-gray-500">Uploading…</span>}
-        </div>
+        {error && <div className="mb-4"><Alert>{error}</Alert></div>}
 
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
-        {!result ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : result.items.length === 0 ? (
-          <p className="text-sm text-gray-500">No documents uploaded yet.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-            {result.items.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{doc.fileName}</p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    {doc.contentType} · uploaded {new Date(doc.uploadedAtUtc).toLocaleString()}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleDelete(doc.id)}
-                  disabled={deletingId === doc.id}
-                  className="shrink-0 rounded-md border border-gray-300 px-3 py-1 text-sm text-red-600 disabled:opacity-50"
+        <Card className="overflow-hidden">
+          {!result ? (
+            <TableSkeleton rows={3} cols={2} />
+          ) : result.items.length === 0 ? (
+            <EmptyState
+              icon={<FileIcon />}
+              title="No documents yet"
+              description="Upload a policy or agreement and the assistant can answer questions from it, with citations."
+              action={
+                <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                  <PlusIcon className="size-4" />
+                  Upload document
+                </Button>
+              }
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {result.items.map((doc) => (
+                <li
+                  key={doc.id}
+                  className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-surface-hover"
                 >
-                  {deletingId === doc.id ? "Deleting…" : "Delete"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </main>
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-subtle">
+                    <FileIcon className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{doc.fileName}</p>
+                    <p className="mt-0.5 text-xs text-subtle">
+                      Uploaded{" "}
+                      {new Date(doc.uploadedAtUtc).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleDelete(doc.id)}
+                    disabled={deletingId === doc.id}
+                    className="shrink-0"
+                  >
+                    <TrashIcon className="size-3.5" />
+                    {deletingId === doc.id ? "Deleting…" : "Delete"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </PageShell>
     </>
   );
 }

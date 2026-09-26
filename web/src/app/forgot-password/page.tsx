@@ -39,13 +39,13 @@ export default function ForgotPasswordPage() {
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface shadow-card p-6 shadow-sm">
         <h1 className="mb-1 text-xl font-semibold">Reset your password</h1>
-        <p className="mb-6 text-sm text-gray-500">Enter your store and email — we&apos;ll send you a reset link.</p>
+        <p className="mb-6 text-sm text-muted">Enter your store and email — we&apos;ll send you a reset link.</p>
 
         {submitted ? (
           <div className="space-y-3 text-sm">
-            <p className="text-gray-700">If that account exists, a reset link has been sent.</p>
+            <p className="text-muted">If that account exists, a reset link has been sent.</p>
             {devResetLink && (
               <p className="rounded-md bg-amber-50 p-3 text-amber-800">
                 Dev mode (no email delivery configured yet):{" "}
@@ -60,20 +60,20 @@ export default function ForgotPasswordPage() {
             <Field label="Store slug" value={storeSlug} onChange={setStoreSlug} placeholder="sharma-general" />
             <Field label="Email" type="email" value={email} onChange={setEmail} placeholder="owner@example.com" />
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              className="w-full rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
             >
               {isSubmitting ? "Sending…" : "Send reset link"}
             </button>
           </form>
         )}
 
-        <p className="mt-4 text-center text-sm text-gray-500">
-          <Link href="/login" className="font-medium text-gray-900 underline">
+        <p className="mt-4 text-center text-sm text-muted">
+          <Link href="/login" className="font-medium text-foreground underline">
             Back to sign in
           </Link>
         </p>

@@ -74,10 +74,10 @@ export default function SalesOrderDetailPage() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <main className="mx-auto w-full max-w-3xl flex-1 animate-[--animate-fade-up] px-4 py-6 sm:px-6 sm:py-8">
+        {error && <p className="text-sm text-danger">{error}</p>}
         {!order ? (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <p className="text-sm text-muted">Loading…</p>
         ) : (
           <>
             <div className="mb-4 flex items-center gap-3">
@@ -85,9 +85,9 @@ export default function SalesOrderDetailPage() {
               <StatusBadge status={order.status} />
             </div>
 
-            <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <div className="mb-6 overflow-x-auto rounded-xl border border-border bg-surface shadow-card">
               <table className="w-full text-left text-sm">
-                <thead className="border-b border-gray-200 text-gray-500">
+                <thead className="border-b border-border text-muted">
                   <tr>
                     <th className="px-3 py-2">Product</th>
                     <th className="px-3 py-2">Qty</th>
@@ -100,7 +100,7 @@ export default function SalesOrderDetailPage() {
                   {order.items.map((item) => {
                     const remaining = item.quantity - item.quantityRefunded;
                     return (
-                      <tr key={item.productId} className="border-b border-gray-100 last:border-0">
+                      <tr key={item.productId} className="border-b border-border last:border-0">
                         <td className="px-3 py-2">{productName(item.productId)}</td>
                         <td className="px-3 py-2">{item.quantity}</td>
                         <td className="px-3 py-2">{item.unitPrice.toFixed(2)}</td>
@@ -114,10 +114,10 @@ export default function SalesOrderDetailPage() {
                                 max={remaining}
                                 value={refundQuantities[item.productId] ?? ""}
                                 onChange={(e) => setRefundQuantities((prev) => ({ ...prev, [item.productId]: e.target.value }))}
-                                className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-gray-500 focus:outline-none"
+                                className="w-20 rounded-md border border-border px-2 py-1 text-sm focus:border-brand focus:outline-none"
                               />
                             ) : (
-                              <span className="text-gray-400">Fully refunded</span>
+                              <span className="text-subtle">Fully refunded</span>
                             )}
                           </td>
                         )}
@@ -128,15 +128,15 @@ export default function SalesOrderDetailPage() {
               </table>
             </div>
 
-            <div className="mb-6 text-right text-sm text-gray-600">
+            <div className="mb-6 text-right text-sm text-muted">
               <p>Subtotal {order.subtotalAmount.toFixed(2)}</p>
               <p>Tax {order.taxAmount.toFixed(2)}</p>
-              <p className="text-lg font-semibold text-gray-900">Total {order.totalAmount.toFixed(2)}</p>
+              <p className="text-lg font-semibold text-foreground">Total {order.totalAmount.toFixed(2)}</p>
             </div>
 
             {canRefund && (
               <form onSubmit={submitRefund}>
-                {refundError && <p className="mb-2 text-sm text-red-600">{refundError}</p>}
+                {refundError && <p className="mb-2 text-sm text-danger">{refundError}</p>}
                 <button
                   type="submit"
                   disabled={isRefunding}
