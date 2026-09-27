@@ -6,6 +6,7 @@ using Application.Catalog;
 using Application.Common;
 using Application.Identity;
 using Google.GenAI;
+using Google.GenAI.Types;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -184,15 +185,47 @@ builder.Services.AddSingleton<Client>(sp =>
     var apiKey = configuration["GEMINI_API_KEY"];
     if (string.IsNullOrWhiteSpace(apiKey))
         throw new InvalidOperationException("GEMINI_API_KEY is not configured.");
-    return new Client(apiKey: apiKey);
+
+    // Retry and timeout come from the SDK's own HttpOptions rather than a
+    // Polly policy wrapped around it: stacking a second generic retry on
+    // top would multiply attempts and hide which layer gave up. Gemini
+    // answers an overloaded model with 503 and a rate limit with 429, and
+    // both are worth retrying; 4xx other than 429 is not.
+    // The 100s HttpClient default was too tight — a tool-calling turn is
+    // several sequential round-trips and real latencies were measured at
+    // 7-28s each, so one slow turn was hitting the timeout.
+    var httpOptions = new HttpOptions
+    {
+        Timeout = int.TryParse(configuration["GEMINI_TIMEOUT_MS"], out var t) ? t : 60_000,
+        RetryOptions = new HttpRetryOptions
+        {
+            Attempts = 3,
+            InitialDelay = 1.0,
+            MaxDelay = 8.0,
+            ExpBase = 2.0,
+            Jitter = 0.3,
+            HttpStatusCodes = [408, 429, 500, 502, 503, 504],
+        },
+    };
+    return new Client(apiKey: apiKey, httpOptions: httpOptions);
 });
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton<IChatClient>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
-    // Default matches the model proven working against this SDK in the
-    // reference RAG project this integration was adapted from — not a guess.
-    var chatModel = configuration["GEMINI_CHAT_MODEL"] ?? "gemini-3.6-flash";
-    return sp.GetRequiredService<Client>().AsIChatClient(chatModel);
+    var client = sp.GetRequiredService<Client>();
+
+    // An ordered fallback chain, not a single model. Retrying the same
+    // endpoint cannot fix "this model is currently experiencing high
+    // demand" — that 503 comes back immediately and persists — so a
+    // second model is what actually keeps the assistant answering.
+    // Defaults were picked by probing this key's available models for
+    // health and latency, not guessed.
+    var models = (configuration["GEMINI_CHAT_MODELS"] ?? "gemini-3.6-flash,gemini-3.7-flash")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    var chain = models.Select(m => (Model: m, Client: client.AsIChatClient(m))).ToList();
+    return new Infrastructure.Ai.FallbackChatClient(
+        chain, sp.GetRequiredService<ILogger<Infrastructure.Ai.FallbackChatClient>>());
 });
 // A lazy WRAPPER, not the real generator directly — CommunityToolkit's
 // VectorStore (registered below) resolves IEmbeddingGenerator the moment

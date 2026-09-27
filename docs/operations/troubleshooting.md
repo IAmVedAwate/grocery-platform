@@ -15,6 +15,18 @@ This log grows with real incidents encountered during development — kept hones
 
 ## Entries
 
+### Assistant returned a bare 500 whenever Gemini was busy
+
+**Encountered:** 2026-09-27, Phase 5 — hit in the browser, both a RAG question and a live-data question failing identically
+**Symptom:** `POST /api/v1/assistant/ask` returned `500` with the generic `"An unexpected error occurred."`, for every question, from both the RAG and tool-calling paths. Nothing in the request or the documents was wrong.
+**Root cause:** Two upstream failures, neither of them a defect in this codebase, both surfacing as an unhandled 500:
+1. `Google.GenAI.ServerError: This model is currently experiencing high demand.` — Gemini's 503 for an overloaded model.
+2. `TaskCanceledException: The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.` — the SDK's default timeout. A tool-calling turn is several sequential round-trips, and probing this key's models measured 7–28 seconds for a *single* trivial call, so one slow turn exceeded 100s in total.
+
+The RAG pipeline itself was never broken — the uploaded document had ingested correctly into 18 embedded chunks. Only the chat model was failing, which is why both question types broke together.
+**Fix:** Three parts. (1) The Gemini client is now built with `HttpOptions.RetryOptions` — exponential backoff with jitter over 408/429/500/502/503/504 — and a configurable timeout (default 60s, `GEMINI_TIMEOUT_MS`). (2) `FallbackChatClient` wraps an ordered chain of models (`GEMINI_CHAT_MODELS`): retrying the same endpoint cannot fix "this model is experiencing high demand", since that 503 returns immediately and persists, so a second model is what actually keeps the assistant answering. (3) A new `ServiceUnavailableAppException` maps to **503** with "The assistant is busy right now. Please try again in a moment." — so a transient upstream outage no longer looks like a bug in the app.
+**Prevention:** `tests/Unit/Ai/FallbackChatClientTests.cs` covers the decision logic without a model: which exceptions justify falling through, that a non-transient error propagates untouched rather than burning the whole chain, that caller cancellation isn't retried, and that total failure surfaces as 503 rather than 500. General rules: (1) retry belongs in whichever layer already understands the protocol — the SDK's own `HttpRetryOptions` here, exactly as EF Core's execution strategy was preferred over Polly for SQL; stacking a generic policy on top multiplies attempts and hides which layer gave up. (2) "Unavailable" and "broken" are different errors and deserve different status codes — collapsing them alarms the user *and* buries real defects among transient noise.
+
 ### Wrong password reported "User ... was not found" — wrong status, wrong message, and a timing leak underneath
 
 **Encountered:** 2026-09-23, found by the developer simply mistyping their own password on the login page

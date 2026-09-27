@@ -38,3 +38,15 @@ public sealed class ForbiddenAppException(string message = "You do not have perm
 /// </summary>
 public sealed class UnauthorizedAppException(string message = "Invalid credentials.")
     : AppException(message);
+
+/// <summary>
+/// A dependency we don't control is unavailable or overloaded — 503, and
+/// the one error class where "try again in a moment" is genuinely the
+/// right advice to give the user.
+///
+/// Distinct from a 500: nothing is broken here and there's no bug to
+/// investigate. Collapsing the two would both alarm the user and bury a
+/// real defect in the same bucket as a transient upstream hiccup.
+/// </summary>
+public sealed class ServiceUnavailableAppException(string message)
+    : AppException(message);

@@ -19,6 +19,7 @@ public sealed class AppExceptionHandler(ILogger<AppExceptionHandler> logger) : I
             ConflictAppException => (StatusCodes.Status409Conflict, "Conflict"),
             UnauthorizedAppException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
             ForbiddenAppException => (StatusCodes.Status403Forbidden, "Forbidden"),
+            ServiceUnavailableAppException => (StatusCodes.Status503ServiceUnavailable, "Service Unavailable"),
             ValidationAppException => (StatusCodes.Status400BadRequest, "Validation Failed"),
             _ => (0, string.Empty)
         };
