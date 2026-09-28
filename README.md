@@ -28,6 +28,78 @@ Built to replace the spreadsheet-plus-legacy-POS pattern most independent stores
 
 ---
 
+## The assistant, actually running
+
+Two real responses from `POST /api/v1/assistant/ask` against a seeded store. Same endpoint, same agent — the model decides whether the answer lives in the database or in an uploaded document.
+
+#### Live business data → tool call
+
+**“what is low stock products in inventory?”**
+
+> The following products are currently at or below their low-stock threshold:
+>
+> 1. **Britannia Bread** (`BREAD-400`) — On Hand: **6**, Threshold: 20
+> 2. **Tea Powder 500g** (`TEA-500`) — On Hand: **4**, Threshold: 8
+> 3. **Toor Dal 1kg** (`DAL-TOOR-1K`) — On Hand: **8**, Threshold: 15
+
+```json
+{ "toolsUsed": ["get_low_stock_items"], "citations": [] }
+```
+
+#### Uploaded document → RAG with a citation
+
+**“What should an employee do if a sale was recorded incorrectly?”**
+
+> 1. **Do NOT delete the sale.**
+> 2. **Issue a refund** against the original invoice from the Sales page (requires the `sales.refund` permission).
+> 3. **Record the correct sale** as a new transaction.
+> 4. If the error is discovered *after* the customer has left, a supervisor must approve the correction before the refund is issued.
+
+```json
+{
+  "toolsUsed": ["search_documents"],
+  "citations": [
+    {
+      "fileName": "store-policy.md",
+      "snippet": "If an employee records a sale incorrectly, they must NOT delete the sale. Instead, raise a refund against the original invoice…"
+    }
+  ]
+}
+```
+
+Nothing in either answer is invented. The first came from SQL through the same application service the REST API uses; the second from a chunk retrieved out of the vector store. Both are traceable through the `toolsUsed` and `citations` fields the endpoint returns.
+
+---
+
+## How a question gets answered
+
+```mermaid
+flowchart TD
+    Q["User question"] --> CTRL["AssistantController<br/>policy: ai.assistant.use"]
+    CTRL --> AGENT["AI Agent<br/>Microsoft.Agents.AI + Gemini"]
+
+    AGENT -->|model selects a tool| TOOLS{"8 registered tools"}
+
+    TOOLS -->|business data| PERM["AiTools<br/>re-checks the CALLER's<br/>permission claims"]
+    TOOLS -->|documents| RAG["search_documents"]
+
+    PERM --> APP["Application services<br/>(same code the REST API uses)"]
+    APP --> DB[("SQL Server<br/>tenant query filters")]
+
+    RAG --> VEC[("SQL Server native VECTOR<br/>tenant applied INSIDE the query")]
+
+    DB --> AGENT
+    VEC --> AGENT
+    AGENT --> OUT["answer + toolsUsed + citations"]
+
+    style PERM fill:#fff3cd,stroke:#d39e00,color:#000
+    style VEC fill:#d1ecf1,stroke:#0c5460,color:#000
+```
+
+The two highlighted boxes are the point: **the model chooses a tool, but choosing is never authorization.** Each tool independently verifies the signed-in user's own permissions before touching data, and document retrieval filters by tenant *inside* the vector search rather than discarding another store's results afterwards.
+
+---
+
 ## Run it locally
 
 Requires Docker Desktop, the .NET 10 SDK, and Node LTS.
