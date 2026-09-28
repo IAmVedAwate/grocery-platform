@@ -272,7 +272,7 @@ Full detail: [architecture/ai-architecture.md](./architecture/ai-architecture.md
 
 ## 18. Testing Strategy
 
-Full strategy: [testing/testing-strategy.md](./testing/testing-strategy.md). Summary: unit tests (xUnit + FluentAssertions) for domain/business rules and calculations; integration tests (WebApplicationFactory + Testcontainers running real SQL Server) for API + database + auth + authorization + the checkout transaction + tenant-isolation proofs; a lightweight architecture test suite asserting the dependency-direction rule; AI-specific tests for tool-selection correctness and RAG retrieval/citation behavior on a fixed evaluation set.
+Full strategy: [testing/testing-strategy.md](./testing/testing-strategy.md). Summary: unit tests (xUnit, with Moq where an Application-layer collaborator must be stubbed) for domain/business rules and calculations; integration tests (WebApplicationFactory + Testcontainers running real SQL Server) for API + database + auth + authorization + the checkout transaction + tenant-isolation proofs; a lightweight architecture test suite asserting the dependency-direction rule; AI-specific tests for tool-selection correctness and RAG retrieval/citation behavior on a fixed evaluation set.
 
 ## 19. Observability
 

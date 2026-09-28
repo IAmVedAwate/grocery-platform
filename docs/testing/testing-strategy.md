@@ -13,7 +13,7 @@ Testing is a first-class project concern, not an afterthought — it is one of t
         │  (every phase)       │   SQL Server — real DB, real auth, real
         │                      │   HTTP pipeline
         ├─────────────────────┤
-        │  Unit                │   xUnit + FluentAssertions — domain rules,
+        │  Unit                │   xUnit (+ Moq) — domain rules,
         │  (every phase)       │   calculations, validation, no I/O
         └─────────────────────┘
         Architecture tests run alongside all of the above, asserting the
@@ -22,7 +22,9 @@ Testing is a first-class project concern, not an afterthought — it is one of t
 
 ## Unit Tests
 
-**Framework:** xUnit + FluentAssertions (+ a mocking library for `Application`-layer interfaces where genuinely needed — never to mock the database in a test that's actually testing database behavior).
+**Framework:** xUnit, with xUnit's own `Assert` API — **not** FluentAssertions, which is deliberately not referenced. An earlier draft of this document named it before any test existed; the assertions were written plain and never changed, so the dependency was never added. Recorded here rather than quietly corrected, because a testing doc that names a library the test projects don't reference is exactly the kind of claim someone checks.
+
+Moq is used for `Application`-layer interfaces where genuinely needed (see `ProductApplicationServiceTests`, which asserts call *ordering* around storage) — never to mock the database in a test that's actually testing database behavior.
 
 **What's covered:** domain business rules (stock cannot go negative, refund cannot exceed original quantity, purchase approval threshold logic), pricing/tax/discount calculations, DTO validation rules. These run with no database, no HTTP, in milliseconds.
 
